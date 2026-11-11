@@ -561,7 +561,11 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
     }
 
     companion object {
-        fun show(a: android.app.Activity, title: String, onClose: (() -> Unit)? = null, build: (Sheet) -> Unit): Sheet {
+        /**
+         * [action], when given, is the sheet's main button, set in the header beside the title so it
+         * is always in reach however long the sheet grows.
+         */
+        fun show(a: android.app.Activity, title: String, onClose: (() -> Unit)? = null, action: Pair<String, (Sheet) -> Unit>? = null, build: (Sheet) -> Unit): Sheet {
             val host = a.findViewById<ViewGroup>(android.R.id.content)
             val scrim = View(a).apply { setBackgroundColor(Kit.SCRIM); alpha = 0f; isClickable = true }
             val panel = LinearLayout(a).apply {
@@ -570,17 +574,29 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
                 setPadding(a.px(22), a.px(14), a.px(22), 0)
                 isClickable = true
                 addView(View(a).apply { background = rounded(Kit.HAIRLINE, 100f) }, LinearLayout.LayoutParams(a.px(36), a.px(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
-                addView(a.text(title, 28f, Kit.INK, displayFace = true).apply { setPadding(0, a.px(14), 0, a.px(10)) })
             }
+            val head = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, a.px(14), 0, a.px(10)) }
+            head.addView(a.text(title, 28f, Kit.INK, displayFace = true), LinearLayout.LayoutParams(0, -2, 1f))
+            val actionView = action?.let { (label, _) ->
+                a.text(label, 15f, Kit.GROUND, 500).apply {
+                    setPadding(a.px(20), a.px(11), a.px(20), a.px(11))
+                    background = rounded(Kit.CHAMPAGNE, a.px(22).toFloat())
+                    isClickable = true
+                    pressable()
+                }.also { head.addView(it) }
+            }
+            panel.addView(head)
             // The body scrolls, so a tall sheet never pushes its own Save off the screen
             val body = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, a.px(28)) }
-            val maxH = (a.resources.displayMetrics.heightPixels * 0.88f).toInt() - a.px(80)
+            val room = host.height.takeIf { it > 0 } ?: a.resources.displayMetrics.heightPixels
+            val maxH = (room * 0.9f).toInt() - a.px(96)
             val scroll = object : ScrollView(a) {
                 override fun onMeasure(w: Int, h: Int) = super.onMeasure(w, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
             }.apply { isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER; addView(body) }
             panel.addView(scroll, LinearLayout.LayoutParams(-1, -2))
             val sheet = Sheet(host, scrim, panel, body, onClose)
             scrim.setOnClickListener { sheet.dismiss() }
+            actionView?.setOnClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.CONFIRM); action?.second?.invoke(sheet) }
             build(sheet)
             host.addView(scrim, FrameLayout.LayoutParams(-1, -1))
             val w = minOf(a.resources.displayMetrics.widthPixels, a.px(620))
