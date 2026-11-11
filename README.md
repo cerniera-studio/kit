@@ -19,7 +19,7 @@ and pulled into every app. A change here reaches every app in its next build.
 The Kit is a git submodule, pinned to a commit, so an app only changes when you move its pin.
 
 ```
-git submodule add https://github.com/cerniera/kit.git kit
+git submodule add https://github.com/cerniera-studio/kit.git kit
 ```
 
 `settings.gradle.kts`:
