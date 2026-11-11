@@ -551,8 +551,7 @@ fun Context.field(hint: String, value: String = "", numeric: Boolean = false, de
  * A sheet that rises from the foot of the screen over a scrim, on the family's curve. Tapping the
  * scrim or calling [dismiss] lowers it. Laid over the Activity's content, so no stock dialog frame.
  */
-class Sheet private constructor(private val host: ViewGroup, private val scrim: View, private val panel: LinearLayout, private val onClose: (() -> Unit)?) {
-    val body: LinearLayout = panel
+class Sheet private constructor(private val host: ViewGroup, private val scrim: View, private val panel: LinearLayout, val body: LinearLayout, private val onClose: (() -> Unit)?) {
 
     fun dismiss() {
         scrim.animate().alpha(0f).setDuration(Kit.QUICK).start()
@@ -568,12 +567,19 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
             val panel = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 background = rounded(Kit.SURFACE, a.px(28).toFloat(), Kit.HAIRLINE, a.px(1))
-                setPadding(a.px(22), a.px(14), a.px(22), a.px(28))
+                setPadding(a.px(22), a.px(14), a.px(22), 0)
                 isClickable = true
                 addView(View(a).apply { background = rounded(Kit.HAIRLINE, 100f) }, LinearLayout.LayoutParams(a.px(36), a.px(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
                 addView(a.text(title, 28f, Kit.INK, displayFace = true).apply { setPadding(0, a.px(14), 0, a.px(10)) })
             }
-            val sheet = Sheet(host, scrim, panel, onClose)
+            // The body scrolls, so a tall sheet never pushes its own Save off the screen
+            val body = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 0, 0, a.px(28)) }
+            val maxH = (a.resources.displayMetrics.heightPixels * 0.88f).toInt() - a.px(80)
+            val scroll = object : ScrollView(a) {
+                override fun onMeasure(w: Int, h: Int) = super.onMeasure(w, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
+            }.apply { isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER; addView(body) }
+            panel.addView(scroll, LinearLayout.LayoutParams(-1, -2))
+            val sheet = Sheet(host, scrim, panel, body, onClose)
             scrim.setOnClickListener { sheet.dismiss() }
             build(sheet)
             host.addView(scrim, FrameLayout.LayoutParams(-1, -1))
