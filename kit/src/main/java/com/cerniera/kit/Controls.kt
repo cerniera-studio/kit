@@ -55,7 +55,15 @@ fun Context.endValue(s: String, color: Int = Kit.MUTED) = text(s, 14f, color, 50
  * under titles fall away, and return as the page settles.
  */
 class Screen(private val ctx: Context, name: String, over: String, maxWidthDp: Int = 620) {
-    val column = LinearLayout(ctx).apply {
+    private val measure = ctx.px(maxWidthDp)
+
+    /** Sized to the space it is given (a pane, when the main screen is split), never the whole display. */
+    val column = object : LinearLayout(ctx) {
+        override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+            val w = if (MeasureSpec.getSize(widthSpec) > measure) MeasureSpec.makeMeasureSpec(measure, MeasureSpec.EXACTLY) else widthSpec
+            super.onMeasure(w, heightSpec)
+        }
+    }.apply {
         orientation = LinearLayout.VERTICAL
         val side = ctx.px(20)
         setPadding(side, ctx.px(34), side, ctx.px(40))
@@ -65,7 +73,7 @@ class Screen(private val ctx: Context, name: String, over: String, maxWidthDp: I
         isVerticalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
         addView(FrameLayout(ctx).apply {
-            addView(column, FrameLayout.LayoutParams(minOf(ctx.resources.displayMetrics.widthPixels, ctx.px(maxWidthDp)), -2, Gravity.CENTER_HORIZONTAL))
+            addView(column, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_HORIZONTAL))
         })
     }
     val status = Pill(ctx)
