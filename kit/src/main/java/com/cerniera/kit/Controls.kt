@@ -527,3 +527,65 @@ fun Context.figure(value: String, label: String, color: Int = Kit.INK): LinearLa
     addView(text(value, 34f, color, displayFace = true))
     addView(text(label.uppercase(), 10.5f, Kit.MUTED, 500).apply { letterSpacing = 0.18f; tag = SECONDARY; setPadding(0, px(4), 0, 0) })
 }
+
+/** A text field in the Kit's type on a raised surface; [numeric] brings up the number pad. */
+fun Context.field(hint: String, value: String = "", numeric: Boolean = false, decimal: Boolean = false): android.widget.EditText =
+    android.widget.EditText(this).apply {
+        setText(value)
+        this.hint = hint
+        textSize = 16f
+        setTextColor(Kit.INK)
+        setHintTextColor(Kit.MUTED)
+        typeface = Kit.sans(context, 450)
+        background = rounded(Kit.RAISED, px(14).toFloat(), Kit.HAIRLINE, px(1))
+        setPadding(px(16), px(14), px(16), px(14))
+        isSingleLine = true
+        inputType = when {
+            decimal -> android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            numeric -> android.text.InputType.TYPE_CLASS_NUMBER
+            else -> android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+    }
+
+/**
+ * A sheet that rises from the foot of the screen over a scrim, on the family's curve. Tapping the
+ * scrim or calling [dismiss] lowers it. Laid over the Activity's content, so no stock dialog frame.
+ */
+class Sheet private constructor(private val host: ViewGroup, private val scrim: View, private val panel: LinearLayout, private val onClose: (() -> Unit)?) {
+    val body: LinearLayout = panel
+
+    fun dismiss() {
+        scrim.animate().alpha(0f).setDuration(Kit.QUICK).start()
+        panel.animate().translationY(panel.height.toFloat()).setDuration(Kit.QUICK).setInterpolator(Kit.ease).withEndAction {
+            host.removeView(scrim); host.removeView(panel); onClose?.invoke()
+        }.start()
+    }
+
+    companion object {
+        fun show(a: android.app.Activity, title: String, onClose: (() -> Unit)? = null, build: (Sheet) -> Unit): Sheet {
+            val host = a.findViewById<ViewGroup>(android.R.id.content)
+            val scrim = View(a).apply { setBackgroundColor(Kit.SCRIM); alpha = 0f; isClickable = true }
+            val panel = LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                background = rounded(Kit.SURFACE, a.px(28).toFloat(), Kit.HAIRLINE, a.px(1))
+                setPadding(a.px(22), a.px(14), a.px(22), a.px(28))
+                isClickable = true
+                addView(View(a).apply { background = rounded(Kit.HAIRLINE, 100f) }, LinearLayout.LayoutParams(a.px(36), a.px(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+                addView(a.text(title, 28f, Kit.INK, displayFace = true).apply { setPadding(0, a.px(14), 0, a.px(10)) })
+            }
+            val sheet = Sheet(host, scrim, panel, onClose)
+            scrim.setOnClickListener { sheet.dismiss() }
+            build(sheet)
+            host.addView(scrim, FrameLayout.LayoutParams(-1, -1))
+            val w = minOf(a.resources.displayMetrics.widthPixels, a.px(620))
+            host.addView(panel, FrameLayout.LayoutParams(w, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+            panel.translationY = a.resources.displayMetrics.heightPixels.toFloat()
+            panel.post {
+                panel.translationY = panel.height.toFloat()
+                panel.animate().translationY(0f).setDuration(Kit.GLIDE).setInterpolator(Kit.ease).start()
+                scrim.animate().alpha(1f).setDuration(Kit.SETTLE).start()
+            }
+            return sheet
+        }
+    }
+}
