@@ -75,7 +75,31 @@ class Hinge(context: Context, private val listener: Listener) : SensorEventListe
         return abs(lastA - firstA) / ((lastT - firstT) / 1000f)
     }
 
+    /**
+     * How fast the last fold was, from 0 (slow) to 1 (fast): the family's definition, from Fold
+     * Motion. Opening is timed from the hinge passing 90° to now (the screen switching): 140 ms or
+     * less is fast, 520 ms or more is slow. Closing reads the same crossing downwards. 0 when the
+     * hinge saw no crossing in the last 1.5 s.
+     */
+    fun foldSpeed(opening: Boolean): Float {
+        val now = SystemClock.elapsedRealtime()
+        for (k in 1 until count) {
+            val a = (head - k + times.size) % times.size
+            val b = (head - k - 1 + times.size) % times.size
+            if (now - times[a] > 1500) break
+            val crossed = if (opening) angles[b] < 90f && angles[a] >= 90f else angles[b] > 90f && angles[a] <= 90f
+            if (crossed) {
+                val ms = (now - times[a]).toFloat()
+                return ((1f - (ms - FAST_MS) / (SLOW_MS - FAST_MS))).coerceIn(0f, 1f)
+            }
+        }
+        return 0f
+    }
+
     companion object {
+        /** foldSpeed's thresholds: the 90° crossing to the screen switching. */
+        const val FAST_MS = 140f
+        const val SLOW_MS = 520f
         const val FAST = 320f
         const val OPEN_AT = 150f
         const val CLOSED_AT = 20f
