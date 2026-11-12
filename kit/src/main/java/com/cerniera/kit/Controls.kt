@@ -122,6 +122,14 @@ class Screen(private val ctx: Context, name: String, over: String, maxWidthDp: I
     }
 
     init {
+        // Both screens, both ways round (12 Nov 2026): the bars and the camera cut-out are kept clear
+        // on every side, so a landscape screen with the bar at its side loses nothing under it
+        root.setOnApplyWindowInsetsListener { v, insets ->
+            val b = insets.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+            v.setPadding(b.left, b.top, b.right, b.bottom)
+            insets
+        }
+        root.clipToPadding = false
         root.setOnScrollChangeListener { _, _, y, _, oldY -> onScrolled(y - oldY) }
         column.addView(ctx.text(over.uppercase(), 11f, Kit.MUTED, 500).apply { letterSpacing = 0.22f; setPadding(ctx.px(4), 0, 0, ctx.px(6)) })
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
