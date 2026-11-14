@@ -25,3 +25,8 @@ android {
         abortOnError = false
     }
 }
+
+dependencies {
+    // Sky's tests run on the JVM: gradle :kit:testDebugUnitTest
+    testImplementation("junit:junit:4.13.2")
+}

@@ -11,6 +11,11 @@ and pulled into every app. A change here reaches every app in its next build.
   `Toggle`, `Segmented` (liquid thumb), `ChoiceList`, `Slider`, `Chips`, `Fold`, `primary`,
   `figure`, and `doctrineCard` for the foot of each app's settings.
 - **Hinge.kt**: the hinge angle sensor, fold speed (fast above 320 °/s), and open/closed events.
+- **Sky.kt**: the family's one sky. `Sky.sun(place, instant)` gives the sun's azimuth and altitude;
+  `Sky.day(place, date, zone)` gives civil dawn, sunrise, the end of morning golden hour, solar
+  noon, the start of evening golden hour, sunset and civil dusk; `Sky.moon(instant)` gives the
+  phase. NOAA's equations, pure arithmetic, no permissions. Apps pass the phone's location and fall
+  back to `Sky.Place.LEEDS`. Tested against pysolar for Leeds (`gradle :kit:testDebugUnitTest`).
 - **Crash.kt**: keeps a crash report and shows it on the next open with Share, Copy and Try again.
 - **Fonts**: Italiana and Jost, both under the SIL Open Font Licence (texts alongside).
 
