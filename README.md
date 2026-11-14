@@ -16,6 +16,9 @@ and pulled into every app. A change here reaches every app in its next build.
   noon, the start of evening golden hour, sunset and civil dusk; `Sky.moon(instant)` gives the
   phase. NOAA's equations, pure arithmetic, no permissions. Apps pass the phone's location and fall
   back to `Sky.Place.LEEDS`. Tested against pysolar for Leeds (`gradle :kit:testDebugUnitTest`).
+- **SkyPlace.kt**: where each app sees the sky from. `SkyPlace.last()` (the phone's last place, else
+  Leeds), `SkyPlace.refresh()` (a fresh coarse fix while the app is open, named by the phone's
+  geocoder) and `describe()` for a settings row. The app declares `ACCESS_COARSE_LOCATION`.
 - **Crash.kt**: keeps a crash report and shows it on the next open with Share, Copy and Try again.
 - **Fonts**: Italiana and Jost, both under the SIL Open Font Licence (texts alongside).
 
