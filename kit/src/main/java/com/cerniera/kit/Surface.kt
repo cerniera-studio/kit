@@ -48,7 +48,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
     /** The same glass measured in units [k] times larger: for content drawn on a canvas scaled by [k]. */
     fun scaled(k: Float) = if (k == 1f) this else Surface(finish, ground, w / k, h / k, radius / k, hairline / k)
 
-    val glassy get() = finish == Finish.VETRO || finish == Finish.CRISTALLO
+    val glassy get() = finish == Finish.VETRO || finish == Finish.CRISTALLO || finish == Finish.GOCCIA
 
     fun paint(c: Canvas) {
         c.save()
@@ -56,11 +56,16 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         when (finish) {
             Finish.VETRO -> frost(c)
             Finish.CRISTALLO -> crystal(c)
+            Finish.GOCCIA -> drop(c)
             Finish.SMOKE -> { zones(c, Face::fill); edges(c) }
             else -> zones(c, Face::fill)
         }
         c.restore()
-        if (glassy) bevel(c) else rim(c)
+        when {
+            finish == Finish.GOCCIA -> meniscus(c)
+            glassy -> bevel(c)
+            else -> rim(c)
+        }
     }
 
     /** The zones' [part] as a smooth field over the whole widget. */
@@ -108,6 +113,62 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         }
         zones(c, Face::fill)
         sheen(c, 0x14)
+    }
+
+    /**
+     * Goccia, the drop. The wallpaper through a thick domed lens: magnified a touch in the middle,
+     * drawn in from beyond the edge across a wide rim, and a little lighter where the glass is
+     * thickest at the rim. Not yet seated there is nothing to bend: the veil over the real wallpaper.
+     */
+    private fun drop(c: Canvas) {
+        val clear = ground.clear?.takeIf { ground.seated }
+        if (clear != null) {
+            val innerW = (clear.width - 2 * ground.margin).coerceAtLeast(1)
+            val lens = Lens.drop(clear, ground.margin, radius * 1.3f * innerW / w)
+            c.drawBitmap(lens, null, RectF(0f, 0f, w, h), Paint(Paint.FILTER_BITMAP_FLAG))
+        }
+        zones(c, Face::fill)
+    }
+
+    /**
+     * Goccia's rim. Light runs right round a drop: a bright line all along the edge, brightest at
+     * the upper left where the light enters, fading round the sides, and returning faintly at the
+     * lower right, where the light that crossed the drop leaves it. Inside the line, a broad soft
+     * glow where the dome's curve catches it, and just within that a faint shade, the curve turning
+     * away, which is what makes it read as thick rather than flat. Its colour keeps the time of day.
+     */
+    private fun meniscus(c: Canvas) {
+        val st = maxOf(hairline * 1.8f, 1.1f)
+        val inset = st / 2f
+        val rim = Shapes.squircle(RectF(inset, inset, w - inset, h - inset), radius - inset)
+        val m = minOf(w, h)
+        // Entering at the upper left, gone across the middle, back faintly at the lower right
+        val sweep = { enter: Int, exit: Int, floor: Int ->
+            LinearGradient(0f, 0f, w, h, intArrayOf(Daylight.light(enter), Daylight.light(floor), Daylight.light(floor), Daylight.light(exit)),
+                floatArrayOf(0f, 0.42f, 0.62f, 1f), Shader.TileMode.CLAMP)
+        }
+        c.save(); c.clipPath(shape)
+        // The shade just inside the glow: the dome turning away from the light
+        c.drawPath(Shapes.squircle(RectF(m * 0.07f, m * 0.07f, w - m * 0.07f, h - m * 0.07f), (radius - m * 0.07f).coerceAtLeast(0f)), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = m * 0.05f
+            maskFilter = android.graphics.BlurMaskFilter(m * 0.05f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            color = 0x14000000
+        })
+        // The glow inside the rim, broad and soft
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = m * 0.09f
+            maskFilter = android.graphics.BlurMaskFilter(m * 0.05f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            shader = sweep(0x66, 0x33, 0x14)
+        })
+        c.restore()
+        // The rim itself, never quite gone, so the drop keeps its outline on any ground
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = st
+            shader = sweep(0xF2, 0xA6, 0x4D)
+        })
+        c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; strokeWidth = hairline; color = 0x26FFFFFF
+        })
     }
 
     /**

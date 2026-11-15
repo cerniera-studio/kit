@@ -24,6 +24,15 @@ enum class Finish(val label: String, val fill: Int, val ink: Int, val edge: Int,
      */
     CRISTALLO("Cristallo clear (adaptive)", 0x30101412, 0xFFF4F1EA.toInt(), 0x66FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     /**
+     * Goccia (15 Nov 2026): a drop of clear water rather than a slab. Thick glass, domed: the middle
+     * magnifies the wallpaper a touch, and the wide, rounded rim draws in what lies beyond the edge,
+     * so the picture visibly bends as it nears the border. Light runs right round the rim, brightest
+     * at the upper left, and comes back faintly at the lower right where it leaves the drop. The
+     * lightest veil of the glass finishes; legibility thickens it only as far as the type needs.
+     * Still, as every widget is: a widget is a picture, so the drop cannot ripple.
+     */
+    GOCCIA("Goccia liquid (adaptive)", 0x24101412, 0xFFF4F1EA.toInt(), 0x80FFFFFF.toInt(), 0xFFD3B27C.toInt(), adaptive = true),
+    /**
      * Smoked glass (31 Oct): always dark and sombre, translucent, thicker and darker towards its
      * edges as real smoked glass is where the light passes through more of it. Adapts its depth.
      */
@@ -59,6 +68,9 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
         // Enough veil that type reads without a shadow, little enough that the wallpaper stays the subject
         Finish.CRISTALLO -> if (light) Face(tinted(0x0A0D0C, 0.22f, 0x54), 0xFFF7F4EE.toInt(), 0x66FFFFFF, 0xFFE2C48E.toInt())
             else Face(tinted(0xFFFFFF, 0.18f, 0x61), 0xFF111415.toInt(), 0x80FFFFFF.toInt(), 0xFF7A5A28.toInt())
+        // Goccia: the faintest veil, so the drop stays water-clear; the legibility rule thickens it where it must
+        Finish.GOCCIA -> if (light) Face(tinted(0x0A0D0C, 0.18f, 0x48), 0xFFF7F4EE.toInt(), 0x80FFFFFF.toInt(), 0xFFE2C48E.toInt())
+            else Face(tinted(0xFFFFFF, 0.14f, 0x52), 0xFF111415.toInt(), 0x99FFFFFF.toInt(), 0xFF7A5A28.toInt())
         Finish.MEMBRANE -> if (light) Face(tinted(0xF2EEE6, 0.42f, 0xC4), 0xFF141A16.toInt(), 0x26000000, 0xFF7A5A28.toInt())
             else Face(tinted(0x0E1210, 0.45f, 0xB8), 0xFFF4F1EA.toInt(), 0x24FFFFFF, 0xFFE2C48E.toInt())
         Finish.ROSSO -> if (light) Face(tinted(0xB8141E, 0.06f, 0xF0), 0xFFF6F1E6.toInt(), 0x55F6D9A8, 0xFFE9CF9E.toInt())
