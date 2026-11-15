@@ -121,7 +121,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
      * thickest at the rim. Not yet seated there is nothing to bend: the veil over the real wallpaper.
      */
     private fun drop(c: Canvas) {
-        val clear = ground.clear?.takeIf { ground.seated }
+        val clear = (ground.sharp ?: ground.clear)?.takeIf { ground.seated }
         if (clear != null) {
             val innerW = (clear.width - 2 * ground.margin).coerceAtLeast(1)
             val lens = Lens.drop(clear, ground.margin, radius * 1.3f * innerW / w)
@@ -138,7 +138,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
      * away, which is what makes it read as thick rather than flat. Its colour keeps the time of day.
      */
     private fun meniscus(c: Canvas) {
-        val st = maxOf(hairline * 1.8f, 1.1f)
+        val st = maxOf(hairline * 2.2f, 1.5f)
         val inset = st / 2f
         val rim = Shapes.squircle(RectF(inset, inset, w - inset, h - inset), radius - inset)
         val m = minOf(w, h)
@@ -158,7 +158,7 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeWidth = m * 0.09f
             maskFilter = android.graphics.BlurMaskFilter(m * 0.05f, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            shader = sweep(0x66, 0x33, 0x14)
+            shader = sweep(0x8C, 0x47, 0x1A)
         })
         c.restore()
         // The rim itself, never quite gone, so the drop keeps its outline on any ground

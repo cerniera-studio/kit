@@ -207,8 +207,12 @@ object Backdrop {
         return Ground.of(out, (margin * s).toInt(), true)
     }
 
-    /** Width in px of the wallpaper slice behind a widget: sharp enough for clear glass. */
-    private const val INNER_WIDTH = 360f
+    /**
+     * Width in px of the wallpaper slice behind a widget: sharp enough for clear glass. 520 since
+     * Goccia (15 Nov 2026), which shows the wallpaper crisp: at 360 a large widget was upscaled
+     * three times and went soft.
+     */
+    const val INNER_WIDTH = 520f
 
     /** The wallpaper's main colour and whether it is light, which Android gives without asking. */
     /** The wallpaper's colour alone: for a picture drawn for the orientation not in use. */
@@ -238,7 +242,7 @@ object Backdrop {
  * right behind the type, so legibility is judged against both, never the mean alone.
  */
 class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean,
-                                 val bright: IntArray = zones, val dark: IntArray = zones) {
+                                 val bright: IntArray = zones, val dark: IntArray = zones, val sharp: Bitmap? = null) {
     /** The zone colour nearest a point given as fractions of the widget's width and height. */
     fun at(fx: Float, fy: Float): Int {
         val x = (fx * COLS).toInt().coerceIn(0, COLS - 1)
@@ -293,7 +297,8 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
             val fm = (margin * f).toInt()
             val frost = Bitmap.createBitmap(soft, fm.coerceAtMost(soft.width - 2), fm.coerceAtMost(soft.height - 2),
                 (soft.width - 2 * fm).coerceAtLeast(2), (soft.height - 2 * fm).coerceAtLeast(2))
-            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated, bright, dark)
+            // Sharp: the picture untouched, for Goccia, whose drop shows the wallpaper crisp
+            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated, bright, dark, picture)
         }
     }
 }
