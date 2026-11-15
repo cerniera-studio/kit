@@ -93,6 +93,72 @@ object Lens {
 }
 
 /**
+ * Goccia's lens (15 Nov 2026). A drop is domed, not a slab with a bevel: its surface curves all the
+ * way from the middle to the rim, steepest at the rim. So the middle magnifies a little, as any
+ * convex glass does, and across a wide rim each pixel looks further and further out, until at the
+ * very edge it sees what lies [margin] beyond it, drawn in and compressed. Where the glass is
+ * thickest at the rim it also gathers light, so the bent picture there is a touch lighter.
+ *
+ * As with Cristallo, no colour fringe: it reads as glitter.
+ */
+fun Lens.drop(src: Bitmap, margin: Int, radius: Float): Bitmap {
+    val sw = src.width; val sh = src.height
+    val w = (sw - 2 * margin).coerceAtLeast(1); val h = (sh - 2 * margin).coerceAtLeast(1)
+    val px = IntArray(sw * sh).also { src.getPixels(it, 0, sw, 0, 0, sw, sh) }
+    val out = IntArray(w * h)
+    val rimW = 0.26f * min(w, h)                     // how far in from the edge the dome steepens
+    val reach = (margin - 1.5f).coerceAtLeast(0f)
+    val r = radius.coerceIn(0f, min(w, h) / 2f)
+    val hw = w / 2f; val hh = h / 2f
+    val mag = 1.05f                                   // the middle's magnification
+
+    fun sample(x: Float, y: Float): Int {
+        val fx = x.coerceIn(0f, sw - 1.001f); val fy = y.coerceIn(0f, sh - 1.001f)
+        val x0 = fx.toInt(); val y0 = fy.toInt(); val tx = fx - x0; val ty = fy - y0
+        val i = y0 * sw + x0
+        fun mix(shift: Int): Float {
+            fun c(p: Int) = (p shr shift) and 255
+            val top = c(px[i]) * (1 - tx) + c(px[i + 1]) * tx
+            val bottom = c(px[i + sw]) * (1 - tx) + c(px[i + sw + 1]) * tx
+            return top * (1 - ty) + bottom * ty
+        }
+        return (0xFF shl 24) or (mix(16).toInt() shl 16) or (mix(8).toInt() shl 8) or mix(0).toInt()
+    }
+
+    for (y in 0 until h) for (x in 0 until w) {
+        val cx = x + 0.5f - hw; val cy = y + 0.5f - hh
+        val qx = abs(cx) - (hw - r); val qy = abs(cy) - (hh - r)
+        val ox = max(qx, 0f); val oy = max(qy, 0f)
+        val outside = sqrt(ox * ox + oy * oy)
+        val inside = -(outside + min(max(qx, qy), 0f) - r)
+        // The middle: magnified about the centre
+        var sx = margin + hw + cx / mag; var sy = margin + hh + cy / mag
+        var lift = 0f
+        if (inside < rimW) {
+            var nx: Float; var ny: Float
+            if (outside > 1e-3f) { nx = ox / outside; ny = oy / outside } else if (qx > qy) { nx = 1f; ny = 0f } else { nx = 0f; ny = 1f }
+            if (cx < 0) nx = -nx
+            if (cy < 0) ny = -ny
+            // The dome's fall towards the rim: a quarter circle, steepening all the way out
+            val t = 1f - (inside / rimW).coerceIn(0f, 1f)
+            val fall = 1f - sqrt((1f - t * t).coerceAtLeast(0f))
+            // From the magnified middle outwards to the furthest the rim can see, smoothly
+            val edgeX = margin + hw + cx; val edgeY = margin + hh + cy
+            sx += (edgeX - sx) * t + nx * reach * fall
+            sy += (edgeY - sy) * t + ny * reach * fall
+            lift = 0.16f * fall
+        }
+        var p = sample(sx, sy)
+        if (lift > 0f) {
+            fun up(v: Int) = (v + (255 - v) * lift).toInt().coerceIn(0, 255)
+            p = (0xFF shl 24) or (up((p shr 16) and 255) shl 16) or (up((p shr 8) and 255) shl 8) or up(p and 255)
+        }
+        out[y * w + x] = p
+    }
+    return Bitmap.createBitmap(out, w, h, Bitmap.Config.ARGB_8888)
+}
+
+/**
  * Light that keeps the time of day (the charter, 19 Oct): cooler and brighter by day, warmer and
  * dimmer at night, which also spares the eyes. It colours the glass's one highlight and the sheen
  * where light enters the slab. The widgets are redrawn on the hour so it follows the day.
