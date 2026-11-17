@@ -12,7 +12,9 @@ import android.view.Choreographer
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -564,12 +566,19 @@ fun Context.field(hint: String, value: String = "", numeric: Boolean = false, de
     }
 
 /**
- * A sheet that rises from the foot of the screen over a scrim, on the family's curve. Tapping the
- * scrim or calling [dismiss] lowers it. Laid over the Activity's content, so no stock dialog frame.
+ * A sheet that rises from the foot of the screen over a scrim, on the family's curve. The handle
+ * means what it shows: pull it (or the title, or the body once it is scrolled to the top) down and
+ * the sheet follows the finger; let go past a third of its height, or flick, and it lowers. Tapping
+ * the handle or the scrim, or calling [dismiss], lowers it too. Laid over the Activity's content, so
+ * no stock dialog frame.
  */
 class Sheet private constructor(private val host: ViewGroup, private val scrim: View, private val panel: LinearLayout, val body: LinearLayout, private val onClose: (() -> Unit)?) {
 
+    private var closing = false
+
     fun dismiss() {
+        if (closing) return
+        closing = true
         scrim.animate().alpha(0f).setDuration(Kit.QUICK).start()
         panel.animate().translationY(panel.height.toFloat()).setDuration(Kit.QUICK).setInterpolator(Kit.ease).withEndAction {
             host.removeView(scrim); host.removeView(panel); onClose?.invoke()
@@ -584,14 +593,22 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
         fun show(a: android.app.Activity, title: String, onClose: (() -> Unit)? = null, action: Pair<String, (Sheet) -> Unit>? = null, build: (Sheet) -> Unit): Sheet {
             val host = a.findViewById<ViewGroup>(android.R.id.content)
             val scrim = View(a).apply { setBackgroundColor(Kit.SCRIM); alpha = 0f; isClickable = true }
-            val panel = LinearLayout(a).apply {
+            var sheetRef: Sheet? = null
+            lateinit var scrollRef: ScrollView
+            val panel = PullPanel(a, scrim, { sheetRef?.dismiss() }) { y -> y < (scrollRef.top) || !scrollRef.canScrollVertically(-1) }.apply {
                 orientation = LinearLayout.VERTICAL
                 background = rounded(Kit.SURFACE, a.px(28).toFloat(), Kit.HAIRLINE, a.px(1))
-                setPadding(a.px(22), a.px(14), a.px(22), 0)
+                setPadding(a.px(22), 0, a.px(22), 0)
                 isClickable = true
-                addView(View(a).apply { background = rounded(Kit.HAIRLINE, 100f) }, LinearLayout.LayoutParams(a.px(36), a.px(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
             }
-            val head = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, a.px(14), 0, a.px(10)) }
+            // The handle sits in a full-width strip tall enough for a thumb; tapping it lowers the sheet
+            val grip = FrameLayout(a).apply {
+                contentDescription = "Close"
+                setOnClickListener { sheetRef?.dismiss() }
+                addView(View(a).apply { background = rounded(Kit.HAIRLINE, 100f) }, FrameLayout.LayoutParams(a.px(36), a.px(4), Gravity.CENTER))
+            }
+            panel.addView(grip, LinearLayout.LayoutParams(-1, a.px(28)))
+            val head = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, 0, 0, a.px(10)) }
             head.addView(a.text(title, 28f, Kit.INK, displayFace = true), LinearLayout.LayoutParams(0, -2, 1f))
             val actionView = action?.let { (label, _) ->
                 a.text(label, 15f, Kit.GROUND, 500).apply {
@@ -609,8 +626,10 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
             val scroll = object : ScrollView(a) {
                 override fun onMeasure(w: Int, h: Int) = super.onMeasure(w, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
             }.apply { isVerticalScrollBarEnabled = false; overScrollMode = View.OVER_SCROLL_NEVER; addView(body) }
+            scrollRef = scroll
             panel.addView(scroll, LinearLayout.LayoutParams(-1, -2))
             val sheet = Sheet(host, scrim, panel, body, onClose)
+            sheetRef = sheet
             scrim.setOnClickListener { sheet.dismiss() }
             actionView?.setOnClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.CONFIRM); action?.second?.invoke(sheet) }
             build(sheet)
@@ -625,5 +644,71 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
             }
             return sheet
         }
+    }
+}
+
+/**
+ * The sheet's panel, which takes a downward pull for itself: from anywhere above the body, or from
+ * the body when it has nothing further up to scroll. Taps and sideways moves pass through untouched.
+ */
+@SuppressLint("ViewConstructor")
+private class PullPanel(c: Context, private val scrim: View, private val close: () -> Unit, private val mayPull: (Float) -> Boolean) : LinearLayout(c) {
+    private val slop = ViewConfiguration.get(c).scaledTouchSlop
+    private val flingMin = ViewConfiguration.get(c).scaledMinimumFlingVelocity * 6
+    private var downX = 0f
+    private var downY = 0f
+    private var startY = 0f
+    private var allowed = false
+    private var dragging = false
+    private var vt: VelocityTracker? = null
+
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = e.x; downY = e.rawY; dragging = false
+                allowed = mayPull(e.y)
+                vt?.recycle(); vt = VelocityTracker.obtain().also { it.addMovement(e) }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                vt?.addMovement(e)
+                val dy = e.rawY - downY
+                if (allowed && dy > slop && dy > abs(e.x - downX)) {
+                    dragging = true; startY = e.rawY
+                    animate().cancel(); scrim.animate().cancel()
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { vt?.recycle(); vt = null }
+        }
+        return false
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (!dragging) return super.onTouchEvent(e)
+        vt?.addMovement(e)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                val d = e.rawY - startY
+                // Down follows the finger; up past where it began resists, like pressing on a closed drawer
+                translationY = if (d >= 0f) d else d / 6f
+                scrim.alpha = (1f - translationY.coerceAtLeast(0f) / height.coerceAtLeast(1)).coerceIn(0f, 1f)
+            }
+            MotionEvent.ACTION_UP -> {
+                vt?.computeCurrentVelocity(1000)
+                val v = vt?.yVelocity ?: 0f
+                vt?.recycle(); vt = null; dragging = false
+                if (translationY > height / 3f || v > flingMin) { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); close() }
+                else settle()
+            }
+            MotionEvent.ACTION_CANCEL -> { vt?.recycle(); vt = null; dragging = false; settle() }
+        }
+        return true
+    }
+
+    private fun settle() {
+        animate().translationY(0f).setDuration(Kit.SETTLE).setInterpolator(Kit.ease).start()
+        scrim.animate().alpha(1f).setDuration(Kit.SETTLE).start()
     }
 }
