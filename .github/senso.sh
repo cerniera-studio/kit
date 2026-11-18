@@ -40,13 +40,14 @@ inject "--es undismiss all";                                                    
 inject "--ez clear true --es at 14:00 --es rain_in 30 --es rain_chance 82";                   expect 12-rain-held-before rain_coming
 inject "--es playing Teardrop --es headphones true";                                          expect 13-rain-held-over-music rain_coming
 
-# The debug view in the four shapes, with rain and an event showing
-inject "--ez clear true --es at 14:00 --es rain_in 40 --es rain_chance 80 --es event_in 70 --es event_title Dentist --es event_where 'Park Square'"
+# The debug view in the four shapes, with rain and an event showing (injected after each start:
+# a fresh process starts with nothing injected)
 for s in "20-cover-portrait 823x1920 320" "21-cover-landscape 1920x823 320" "22-main-portrait 1503x1568 280" "23-main-landscape 1568x1503 280"; do
   set -- $s
   adb shell wm density $3; adb shell wm size $2; sleep 3; open
-  shot "$1"
-  adb shell input swipe 400 1100 400 300 300; sleep 1.2; shot "$1-signals"
+  inject "--ez clear true --es at 14:00 --es rain_in 40 --es rain_chance 80 --es event_in 70 --es event_title Dentist --es event_where 'Park Square'"
+  sleep 1; shot "$1"
+  adb shell input swipe 400 1100 400 250 500; sleep 0.8; adb shell input swipe 400 1100 400 250 500; sleep 1.5; shot "$1-signals"
 done
 adb shell wm size reset; adb shell wm density reset
 
