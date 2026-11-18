@@ -1,2 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Senso reads Cielo's rain through this provider when Cielo shares it -->
+    <queries>
+        <provider android:authorities="com.cerniera.cielo.rain" />
+    </queries>
+</manifest>

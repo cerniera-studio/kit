@@ -36,3 +36,58 @@ jobs:
           status=${PIPESTATUS[0]}
           grep -E "FAILED|off by|expected:|^e: " test.log | head -20 | while IFS= read -r line; do echo "::error::${line}"; done
           exit $status
+
+  # Senso in the emulator (18 Nov 2026): the lab app, signals injected, the debug view photographed.
+  # The screenshots and each scenario's senso.json go to the screens branch.
+  senso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build the lab
+        shell: bash
+        run: |
+          set +e
+          gradle :lab:assembleDebug --no-daemon 2>&1 | tee lab.log
+          status=${PIPESTATUS[0]}
+          grep -E "^e: |What went wrong|^> [^T]|Could not|rror:" lab.log | grep -v "^> Task" | head -12 | while IFS= read -r line; do echo "::error::${line}"; done
+          exit $status
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Senso in the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: false
+          script: bash .github/senso.sh
+
+      - name: Publish screenshots to the screens branch
+        if: always()
+        run: |
+          [ -d shots ] || exit 0
+          cd shots
+          git init -q -b screens
+          git config user.name "Senso lab"; git config user.email "actions@users.noreply.github.com"
+          git add -A && git commit -qm "Senso screens from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" screens
