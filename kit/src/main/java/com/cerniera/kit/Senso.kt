@@ -226,7 +226,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         return listOf(
             Reading("Clock", time(now), if (shift != 0L) "Injected" else "Phone", null),
             Reading("Screen", when (s.unfolded) { true -> "Main"; false -> "Cover"; null -> "Unknown" }, src("unfolded", "Screen width"), null),
-            Reading("In front", s.front ?: "Unknown", src("front", if (fedFront) appName else "Not fed by $appName"), s.frontSince),
+            Reading("In front", s.front?.let(::label) ?: "Unknown", src("front", if (fedFront) appName else "Not fed by $appName"), s.frontSince),
             Reading("Playing", s.playing?.let { (if (it.playing) "" else "Paused: ") + it.title } ?: "Nothing",
                 src("playing", if (fedPlaying) "Media session" else "Not fed by $appName"), s.playing?.since),
             Reading("Headphones", yes(s.headphones), src("headphones", "Audio outputs"), s.headphonesSince),
@@ -237,6 +237,12 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             Reading("Home", yes(s.home), src("home", "Not known yet"), null),
             Reading("Sky over", s.place.name, "Kit.Sky", null),
         )
+    }
+
+    private val labels = HashMap<String, String>()
+    /** An app's name rather than its package, for the debug view. */
+    private fun label(pkg: String) = labels.getOrPut(pkg) {
+        runCatching { app.packageManager.run { getApplicationLabel(getApplicationInfo(pkg, 0)).toString() } }.getOrDefault(pkg)
     }
 
     private fun note(line: String) {
