@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A fixed id, so the system keeps a Screen's scroll position when the activity is rebuilt
+         after turning, folding or resizing (adaptive quality, 19 Nov 2026). -->
+    <item name="kit_screen" type="id" />
+</resources>

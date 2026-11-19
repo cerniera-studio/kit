@@ -1,6 +1,10 @@
 package com.cerniera.kit
 
 import android.content.Context
+import android.hardware.display.DisplayManager
+import android.graphics.Point
+import android.view.Display
+import android.view.WindowManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -17,7 +21,7 @@ import kotlin.math.abs
  * the Fold 8 Ultra; change it here and every app follows.
  *
  * No hinge sensor (an emulator, another phone): [present] is false and nothing is reported, so
- * apps fall back to their screen-size reading of folded or open.
+ * apps fall back to [unfolded], read from the whole screen.
  */
 class Hinge(context: Context, private val listener: Listener) : SensorEventListener {
     interface Listener {
@@ -104,7 +108,27 @@ class Hinge(context: Context, private val listener: Listener) : SensorEventListe
         const val OPEN_AT = 150f
         const val CLOSED_AT = 20f
 
-        /** Folded or open, from the screen the app is on: the main screen is at least 600dp at its narrowest. */
-        fun unfolded(c: Context) = c.resources.configuration.smallestScreenWidthDp >= 600
+        /**
+         * Folded or open, from the whole screen the app is on, never from the app's own window: the
+         * main screen is at least 600dp at its narrowest. A half of the main screen in split screen,
+         * or a pop-up window, is still the main screen (adaptive quality, 19 Nov 2026). Turning the
+         * phone never reads as a fold, because the narrowest side is used.
+         */
+        fun unfolded(c: Context): Boolean {
+            val (w, h) = screenPx(c) ?: return c.resources.configuration.smallestScreenWidthDp >= 600
+            return minOf(w, h) / c.resources.displayMetrics.density >= 600f
+        }
+
+        /** The full screen in pixels, whatever size the app's window is; null if it can't be read. */
+        @Suppress("DEPRECATION")
+        fun screenPx(c: Context): Pair<Int, Int>? {
+            if (runCatching { c.isUiContext }.getOrDefault(false)) {
+                runCatching { c.getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds }
+                    .getOrNull()?.takeIf { it.width() > 0 }?.let { return it.width() to it.height() }
+            }
+            val p = Point()
+            runCatching { c.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)?.getRealSize(p) }
+            return if (p.x > 0 && p.y > 0) p.x to p.y else null
+        }
     }
 }
