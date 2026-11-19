@@ -225,7 +225,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         fun inMin(t: Long) = ((t - now) / 60_000L).let { if (it >= 0) "in $it min" else "${-it} min ago" }
         return listOf(
             Reading("Clock", time(now), if (shift != 0L) "Injected" else "Phone", null),
-            Reading("Screen", when (s.unfolded) { true -> "Main"; false -> "Cover"; null -> "Unknown" }, src("unfolded", "Screen width"), null),
+            Reading("Screen", when (s.unfolded) { true -> "Main"; false -> "Cover"; null -> "Unknown" }, src("unfolded", "Whole screen"), null),
             Reading("In front", s.front?.let(::label) ?: "Unknown", src("front", if (fedFront) appName else "Not fed by $appName"), s.frontSince),
             Reading("Playing", s.playing?.let { (if (it.playing) "" else "Paused: ") + it.title } ?: "Nothing",
                 src("playing", if (fedPlaying) "Media session" else "Not fed by $appName"), s.playing?.since),

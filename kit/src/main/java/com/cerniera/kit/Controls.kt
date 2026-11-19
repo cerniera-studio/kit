@@ -71,6 +71,8 @@ class Screen(private val ctx: Context, name: String, over: String, maxWidthDp: I
         setPadding(side, ctx.px(34), side, ctx.px(40))
     }
     val root = ScrollView(ctx).apply {
+        // Keeps the scroll position through a turn, fold or resize (one Screen per window)
+        id = R.id.kit_screen
         setBackgroundColor(Kit.GROUND)
         isVerticalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
@@ -634,7 +636,8 @@ class Sheet private constructor(private val host: ViewGroup, private val scrim: 
             actionView?.setOnClickListener { v -> v.performHapticFeedback(HapticFeedbackConstants.CONFIRM); action?.second?.invoke(sheet) }
             build(sheet)
             host.addView(scrim, FrameLayout.LayoutParams(-1, -1))
-            val w = minOf(a.resources.displayMetrics.widthPixels, a.px(620))
+            // Sized to the window it sits in (split screen, pop-up), not the display
+            val w = minOf(host.width.takeIf { it > 0 } ?: a.resources.displayMetrics.widthPixels, a.px(620))
             host.addView(panel, FrameLayout.LayoutParams(w, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
             panel.translationY = a.resources.displayMetrics.heightPixels.toFloat()
             panel.post {
