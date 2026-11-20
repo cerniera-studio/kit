@@ -58,12 +58,13 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
             Finish.CRISTALLO -> crystal(c)
             Finish.GOCCIA -> drop(c)
             Finish.SMOKE -> { zones(c, Face::fill); edges(c) }
+            Finish.OTTONE -> brushed(c)
             else -> zones(c, Face::fill)
         }
         c.restore()
         when {
             finish == Finish.GOCCIA -> meniscus(c)
-            glassy -> bevel(c)
+            glassy || finish == Finish.OTTONE -> bevel(c)
             else -> rim(c)
         }
     }
@@ -169,6 +170,37 @@ class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float
         c.drawPath(rim, Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeWidth = hairline; color = 0x26FFFFFF
         })
+    }
+
+    /**
+     * Ottone, brushed brass. The brass itself, then light falling across the grain in soft upright
+     * bands (brushed metal throws its light at right angles to the grain), brightest towards the
+     * upper left and keeping the time of day, then the grain: hairlines drawn straight across,
+     * each a little longer or shorter, lighter or darker, than the last. The bands only lighten,
+     * so the ink keeps the contrast the legibility rule proved on the plain brass; the dark grain
+     * is a hairline, never a field. The grain is seeded, so the same widget always shows the same
+     * metal and a redraw never shimmers.
+     */
+    private fun brushed(c: Canvas) {
+        zones(c, Face::fill)
+        val stops = intArrayOf(0x30, 0x0C, 0x24, 0x04, 0x1A, 0x00, 0x12)
+        c.drawRect(0f, 0f, w, h, Paint().apply {
+            shader = LinearGradient(0f, 0f, w, 0f, IntArray(stops.size) { Daylight.light(stops[it]) },
+                floatArrayOf(0f, 0.16f, 0.3f, 0.47f, 0.66f, 0.82f, 1f), Shader.TileMode.CLAMP)
+        })
+        c.drawRect(0f, 0f, w, h, Paint().apply {
+            shader = LinearGradient(0f, 0f, 0f, h, Daylight.light(0x1C), Daylight.light(0), Shader.TileMode.CLAMP)
+        })
+        val rnd = java.util.Random(0x0770E)
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = hairline }
+        var y = hairline / 2f
+        while (y < h) {
+            line.color = if (rnd.nextInt(3) > 0) ((0x08 + rnd.nextInt(0x18)) shl 24) or 0xFFF4DE
+                else ((0x05 + rnd.nextInt(0x0C)) shl 24) or 0x3A2810
+            val x0 = (rnd.nextFloat() * 0.4f - 0.15f) * w
+            c.drawLine(x0, y, x0 + w * (0.45f + rnd.nextFloat() * 0.9f), y, line)
+            y += hairline * (0.9f + rnd.nextFloat() * 1.5f)
+        }
     }
 
     /**

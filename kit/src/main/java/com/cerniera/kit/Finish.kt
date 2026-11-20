@@ -4,7 +4,7 @@ import android.graphics.Color
 
 /**
  * The finishes (moved from Fold Widgets into the Kit, 14 Nov 2026, so every widget in the family
- * wears them the same way: Fold Widgets' and Nodo's). All but Visconti and Paper come from Fold Taskbar and read what is behind them,
+ * wears them the same way: Fold Widgets' and Nodo's). All but Visconti, Paper, Goccia and Ottone come from Fold Taskbar and read what is behind them,
  * zone by zone, exactly as the bar does: dark over light, light over dark, with a trace of the
  * colour underneath. Vetro is new for the widgets: real glass, the wallpaper behind the widget
  * blurred and veiled.
@@ -43,7 +43,18 @@ enum class Finish(val label: String, val fill: Int, val ink: Int, val edge: Int,
     CARBONIO("Carbonio (adaptive)", 0xF216181A.toInt(), 0xFFE9E6DF.toInt(), 0x14FFFFFF, 0xFFD3B27C.toInt(), adaptive = true),
     CERAMICA("Ceramica (adaptive)", 0xF2264E8C.toInt(), 0xFFF4F1EA.toInt(), 0x40FFFFFF, 0xFFE9CF9E.toInt(), adaptive = true),
     VISCONTI("Visconti", 0xF01A3F31.toInt(), 0xFFEFE6D3.toInt(), 0x73D3B27C, 0xFFD3B27C.toInt()),
-    PAPER("Paper", 0xF2F6F4EE.toInt(), 0xFF1D2620.toInt(), 0x14000000, 0xFF1F4A3A.toInt());
+    PAPER("Paper", 0xF2F6F4EE.toInt(), 0xFF1D2620.toInt(), 0x14000000, 0xFF1F4A3A.toInt()),
+    /**
+     * Ottone (20 Nov 2026): brushed brass, the family's first metal. The pack had glass, lacquer,
+     * glaze and paper; nothing struck from metal. Brass carries the champagne of the settings' own
+     * light, so the twelfth tile completes the grid in the family's colour. A fine grain drawn
+     * straight across, as a brushed watch case is, so it reads apart from the diagonal finishes;
+     * light falls across the grain in soft bands, keeps the time of day, and lights the chamfer at
+     * the upper left. Always brass, always dark umber ink: what adapts is a trace of the ground and
+     * its depth (bright over dark ground, a shade antiqued over light). The bands only ever lighten
+     * the metal, so the legibility rule, which judges the plain brass, holds over the whole face.
+     */
+    OTTONE("Ottone (adaptive)", 0xF8D2B47C.toInt(), 0xFF241A0E.toInt(), 0x59FFF1CC, 0xFF6A4512.toInt(), adaptive = true);
 
     val short get() = label.substringBefore(" (")
 }
@@ -88,6 +99,9 @@ fun faceFor(finish: Finish, colour: Int, light: Boolean): Face {
             if (light) Face(glaze, 0xFF14181A.toInt(), 0x66FFFFFF, 0xFF6E4A16.toInt())
             else Face(glaze, 0xFFF4F1EA.toInt(), 0x40FFFFFF, 0xFFE9CF9E.toInt())
         }
+        // Ottone is always brass with umber ink: bright over dark ground, a shade antiqued over light
+        Finish.OTTONE -> if (light) Face(tinted(0xD2B47C, 0.04f, 0xF8), 0xFF241A0E.toInt(), 0x66FFF1CC, 0xFF6A4512.toInt())
+            else Face(tinted(0xCDAE76, 0.05f, 0xF8), 0xFF1E160B.toInt(), 0x4DFFF1CC, 0xFF5E3D10.toInt())
         // Smoke is always the dark one (31 Oct): sombre over everything. What adapts is its depth and
         // its trace of colour: deepest over dark ground, a shade denser over light so ivory still reads
         Finish.SMOKE -> if (light) Face(tinted(0x080A09, 0.14f, 0xCC), 0xFFEDEAE2.toInt(), 0x14FFFFFF, 0xFFD3B27C.toInt())
