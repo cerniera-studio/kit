@@ -72,9 +72,16 @@ class SensoRulesTest {
         val m = Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min),
             headphones = true, headphonesSince = noon - 30_000L), noon)
         assertEquals("Resume Teardrop", m?.why)
-        // Long after the headphones went in: nothing
-        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min),
+        // Long after the headphones went in and the pause: nothing
+        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 11 * min),
             headphones = true, headphonesSince = noon - 10 * min), noon))
+    }
+
+    @Test fun justPausedStaysForTenMinutes() {
+        val m = Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 4 * min)), noon)
+        assertEquals("Paused: Teardrop", m?.why)
+        assertTrue(m!!.confidence >= Rules.THRESHOLD)
+        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min)), noon))
     }
 
     @Test fun dismissedIsNeverOffered() {
