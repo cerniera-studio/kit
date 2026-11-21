@@ -34,6 +34,9 @@ inject "--ez clear true --es at 14:00 --es playing Teardrop --es artist 'Massive
 inject "--ez clear true --es at 14:00 --es playing Teardrop --es paused true --es paused_ago 10 --es headphones true --es headphones_ago 0.5"; expect 07-resume listening
 inject "--ez clear true --es at 14:00 --es playing Teardrop --es paused true --es paused_ago 4";   expect 07b-just-paused listening
 inject "--ez clear true --es at 14:00 --es playing Teardrop --es paused true --es paused_ago 12";  expect 07c-paused-long-ago none
+inject "--ez clear true --es at 09:00 --es occasion Anniversary";                     expect 08a-occasion-morning occasion
+inject "--ez clear true --es sunset_in 8";                                                    expect 08b-sunset sunset
+inject "--ez clear true --es sunset_in 8 --es rain_in 30 --es rain_chance 80";               expect 08c-no-sunset-in-rain rain_coming
 inject "--ez clear true --es at 23:30 --es charging true --es lux 2";                          expect 08-winding-down winding_down
 inject "--ez clear true --es at 14:00 --es rain_in 30 --es rain_chance 90";                   expect 09-rain-before-dismissal rain_coming
 inject "--es dismiss rain_coming";                                                             expect 10-rain-dismissed none
