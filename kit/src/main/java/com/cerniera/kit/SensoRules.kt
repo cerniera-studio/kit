@@ -19,7 +19,11 @@ enum class Kind(val id: String, val label: String) {
     LISTENING("listening", "Listening"),
     WINDING_DOWN("winding_down", "Winding down"),
     WAKING("waking", "Waking"),
-    READING("reading", "Reading");
+    READING("reading", "Reading"),
+    /** An all-day occasion today (a birthday, an anniversary), in the morning. 21 Nov 2026. */
+    OCCASION("occasion", "An occasion"),
+    /** The golden hour before sunset, on a dry evening. 21 Nov 2026. */
+    SUNSET("sunset", "Sunset");
 
     companion object {
         fun of(id: String?): Kind? = entries.firstOrNull { it.id == id?.trim()?.lowercase() }
@@ -57,6 +61,8 @@ data class Signals(
     val place: Sky.Place = Sky.Place.LEEDS,
     /** Launchers, so time on the home screen never counts as reading. */
     val homes: Set<String> = emptySet(),
+    /** Today's first all-day event (a birthday, an anniversary), or null. */
+    val occasion: SensoEvent? = null,
 )
 
 /**
@@ -87,7 +93,8 @@ object Rules {
 
     /** Every moment the signals support, most certain first. Dismissed kinds are kept, marked. */
     fun read(s: Signals, now: Long, zone: ZoneId = ZoneId.systemDefault(), dismissed: Set<Kind> = emptySet()): List<Moment> =
-        listOfNotNull(leaving(s, now, zone), rain(s, now, zone), listening(s, now), windingDown(s, now, zone), waking(s, now, zone), reading(s, now))
+        listOfNotNull(leaving(s, now, zone), rain(s, now, zone), listening(s, now), windingDown(s, now, zone), waking(s, now, zone), reading(s, now),
+            occasion(s, now, zone), sunset(s, now, zone))
             .map { if (it.kind in dismissed) it.copy(dismissed = true) else it }
             .sortedByDescending { it.confidence }
 
@@ -214,5 +221,37 @@ object Rules {
         if (mins < 8f) return null
         val c = 0.45f + 0.35f * ((mins - 8f) / 22f).coerceIn(0f, 1f)
         return Moment(Kind.READING, c, "One app for ${mins.roundToInt()} min", listOf("open · $app for ${mins.roundToInt()} min · ${f(c)}"))
+    }
+
+    /** An occasion: today's all-day event, sure in the morning (so it's seen in time), quieter after. */
+    fun occasion(s: Signals, now: Long, zone: ZoneId): Moment? {
+        val e = s.occasion ?: return null
+        val t = Instant.ofEpochMilli(now).atZone(zone)
+        val c = when (t.hour) {
+            in 6..11 -> 0.72f
+            in 12..16 -> 0.5f
+            else -> return null
+        }
+        val part = if (t.hour < 12) "morning" else "afternoon"
+        return Moment(Kind.OCCASION, c, "Today: ${e.title}", listOf("all-day today · $part · ${f(c)}"))
+    }
+
+    /**
+     * Sunset: the golden hour, from Kit.Sky's real sunset over [Signals.place]. Only on a dry
+     * evening (no rain due in the next two hours); surer as it nears, and at the weekend.
+     */
+    fun sunset(s: Signals, now: Long, zone: ZoneId): Moment? {
+        val t = Instant.ofEpochMilli(now).atZone(zone)
+        val set = Sky.day(s.place, t.toLocalDate(), zone).sunset?.toEpochMilli() ?: return null
+        val mins = (set - now) / MIN.toFloat()
+        if (mins <= 0f || mins > 45f) return null
+        val r = s.rain
+        if (r != null && r.startsAt - now < 120 * MIN && r.chance >= 0.4f) return null
+        val reasons = mutableListOf<String>()
+        var c = 0.52f + 0.12f * (1f - mins / 45f)
+        reasons += "sunset ${clock(set, zone)} over ${s.place.name}, in ${mins.roundToInt()} min · base ${f(c)}"
+        reasons += "no rain due"
+        if (t.dayOfWeek.value >= 6) { c += 0.06f; reasons += "the weekend · +0.06" }
+        return Moment(Kind.SUNSET, c.coerceIn(0f, 1f), "Sunset at ${clock(set, zone)}", reasons)
     }
 }

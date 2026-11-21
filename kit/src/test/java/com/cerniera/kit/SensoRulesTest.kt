@@ -123,4 +123,22 @@ class SensoRulesTest {
         assertTrue(m.confidence >= Rules.THRESHOLD)
         assertNull(Rules.waking(Signals(), at(12), zone))
     }
+
+    @Test fun occasionInTheMorning() {
+        val o = SensoEvent("Compleanno", at(0), at(23, 59), null, allDay = true)
+        assertEquals(Kind.OCCASION, Rules.pick(Rules.read(Signals(occasion = o), at(9), zone))?.kind)
+        assertNull(Rules.pick(Rules.read(Signals(occasion = o), at(14), zone)))
+        assertNull(Rules.occasion(Signals(occasion = o), at(20), zone))
+    }
+
+    @Test fun sunsetOnADryEvening() {
+        // 18 Nov 2026, Leeds: sunset about 16:05
+        val set = Sky.day(Sky.Place.LEEDS, java.time.LocalDate.of(2026, 11, 18), zone).sunset!!.toEpochMilli()
+        val m = Rules.sunset(Signals(), set - 10 * min, zone)
+        assertNotNull(m)
+        assertTrue(m!!.why.startsWith("Sunset at "))
+        assertNull(Rules.sunset(Signals(), set - 60 * min, zone))
+        assertNull(Rules.sunset(Signals(), set + 5 * min, zone))
+        assertNull(Rules.sunset(Signals(rain = SensoRain(set, 0.8f)), set - 10 * min, zone))
+    }
 }
