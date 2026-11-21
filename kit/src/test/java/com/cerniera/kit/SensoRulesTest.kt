@@ -72,9 +72,16 @@ class SensoRulesTest {
         val m = Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min),
             headphones = true, headphonesSince = noon - 30_000L), noon)
         assertEquals("Resume Teardrop", m?.why)
-        // Long after the headphones went in: nothing
-        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min),
+        // Long after the headphones went in and the pause: nothing
+        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 11 * min),
             headphones = true, headphonesSince = noon - 10 * min), noon))
+    }
+
+    @Test fun justPausedStaysForTenMinutes() {
+        val m = Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 4 * min)), noon)
+        assertEquals("Paused: Teardrop", m?.why)
+        assertTrue(m!!.confidence >= Rules.THRESHOLD)
+        assertNull(Rules.listening(Signals(playing = SensoPlaying("p", "Teardrop", "", false, noon - 10 * min)), noon))
     }
 
     @Test fun dismissedIsNeverOffered() {
@@ -115,5 +122,23 @@ class SensoRulesTest {
         val m = Rules.waking(Signals(charging = false, chargingSince = at(7, 50)), at(8), zone)!!
         assertTrue(m.confidence >= Rules.THRESHOLD)
         assertNull(Rules.waking(Signals(), at(12), zone))
+    }
+
+    @Test fun occasionInTheMorning() {
+        val o = SensoEvent("Compleanno", at(0), at(23, 59), null, allDay = true)
+        assertEquals(Kind.OCCASION, Rules.pick(Rules.read(Signals(occasion = o), at(9), zone))?.kind)
+        assertNull(Rules.pick(Rules.read(Signals(occasion = o), at(14), zone)))
+        assertNull(Rules.occasion(Signals(occasion = o), at(20), zone))
+    }
+
+    @Test fun sunsetOnADryEvening() {
+        // 18 Nov 2026, Leeds: sunset about 16:05
+        val set = Sky.day(Sky.Place.LEEDS, java.time.LocalDate.of(2026, 11, 18), zone).sunset!!.toEpochMilli()
+        val m = Rules.sunset(Signals(), set - 10 * min, zone)
+        assertNotNull(m)
+        assertTrue(m!!.why.startsWith("Sunset at "))
+        assertNull(Rules.sunset(Signals(), set - 60 * min, zone))
+        assertNull(Rules.sunset(Signals(), set + 5 * min, zone))
+        assertNull(Rules.sunset(Signals(rain = SensoRain(set, 0.8f)), set - 10 * min, zone))
     }
 }

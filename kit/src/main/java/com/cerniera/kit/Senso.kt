@@ -210,6 +210,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             chargingSince = pick("charging", real.chargingSince, fake.chargingSince),
             lux = pick("lux", real.lux, fake.lux),
             event = pick("event", real.event, fake.event),
+            occasion = pick("occasion", real.occasion, fake.occasion),
             rain = pick("rain", real.rain, fake.rain),
             home = pick("home", real.home, fake.home),
             place = real.place,
@@ -233,6 +234,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             Reading("Charging", yes(s.charging), src("charging", "Battery"), s.chargingSince),
             Reading("Light", s.lux?.let { "${it.toInt()} lux" } ?: "Unknown", src("lux", lightState), null),
             Reading("Next event", s.event?.let { "${it.title} ${inMin(it.start)}" } ?: "None", src("event", calendarState), null),
+            Reading("Occasion today", s.occasion?.title ?: "None", src("occasion", calendarState), null),
             Reading("Rain", s.rain?.let { "${(it.chance * 100).toInt()}% ${inMin(it.startsAt)}" } ?: "None", src("rain", rainState), null),
             Reading("Home", yes(s.home), src("home", "Not known yet"), null),
             Reading("Sky over", s.place.name, "Kit.Sky", null),
@@ -307,7 +309,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
     /** The next event that has not started, in the next 24 hours. Declined events are skipped. */
     fun readCalendar() {
         lastCalendar = now()
-        if (!calendarAllowed()) { calendarState = "No calendar access"; real = real.copy(event = null); return }
+        if (!calendarAllowed()) { calendarState = "No calendar access"; real = real.copy(event = null, occasion = null); return }
         val from = now()
         work.execute {
             val found = runCatching {
@@ -315,20 +317,29 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
                     .appendPath(from.toString()).appendPath((from + 24 * 3600_000L).toString()).build()
                 val cols = arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
                     CalendarContract.Instances.EVENT_LOCATION, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.SELF_ATTENDEE_STATUS)
+                // All-day events are stored at UTC midnight of their date
+                val today = Instant.ofEpochMilli(from).atZone(zone).toLocalDate()
                 app.contentResolver.query(uri, cols, null, null, CalendarContract.Instances.BEGIN + " ASC")?.use { cur ->
                     var out: SensoEvent? = null
-                    while (cur.moveToNext() && out == null) {
+                    var occasion: SensoEvent? = null
+                    while (cur.moveToNext() && (out == null || occasion == null)) {
                         val begin = cur.getLong(1)
-                        if (begin <= from || cur.getInt(4) == 1) continue
                         if (cur.getInt(5) == CalendarContract.Attendees.ATTENDEE_STATUS_DECLINED) continue
-                        out = SensoEvent(cur.getString(0) ?: "Event", begin, cur.getLong(2), cur.getString(3))
+                        val title = cur.getString(0) ?: "Event"
+                        if (cur.getInt(4) == 1) {
+                            if (occasion == null && Instant.ofEpochMilli(begin).atZone(ZoneId.of("UTC")).toLocalDate() == today)
+                                occasion = SensoEvent(title, begin, cur.getLong(2), null, allDay = true)
+                            continue
+                        }
+                        if (begin <= from) continue
+                        if (out == null) out = SensoEvent(title, begin, cur.getLong(2), cur.getString(3))
                     }
-                    out
+                    out to occasion
                 }
             }
             main.post {
                 calendarState = if (found.isSuccess) "Calendar" else "Calendar unreadable"
-                real = real.copy(event = found.getOrNull())
+                real = real.copy(event = found.getOrNull()?.first, occasion = found.getOrNull()?.second)
                 recompute(null)
             }
         }
@@ -403,6 +414,13 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
                 shift = wall.with(t).toInstant().toEpochMilli() - System.currentTimeMillis()
             }
         }
+        // The clock set to some minutes before today's real sunset (tests that hold in any season)
+        num("sunset_in")?.let { m ->
+            val wall = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(zone)
+            Sky.day(real.place, wall.toLocalDate(), zone).sunset?.let { set ->
+                shift = set.toEpochMilli() - (m * 60_000).toLong() - System.currentTimeMillis()
+            }
+        }
         val now = now()
         fun ago(k: String) = num(k)?.let { now - (it * 60_000).toLong() } ?: now
         if (none("rain")) { faked += "rain"; fake = fake.copy(rain = null) }
@@ -414,6 +432,11 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         num("event_in")?.let { m ->
             val start = now + (m * 60_000).toLong()
             faked += "event"; fake = fake.copy(event = SensoEvent(x["event_title"] ?: "Event", start, start + 3600_000L, x["event_where"]?.ifBlank { null }))
+        }
+        if (none("occasion")) { faked += "occasion"; fake = fake.copy(occasion = null) }
+        else x["occasion"]?.let { t ->
+            val day = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+            faked += "occasion"; fake = fake.copy(occasion = SensoEvent(t, day, day + 86_400_000L, null, allDay = true))
         }
         if (none("playing")) { faked += "playing"; fake = fake.copy(playing = null) }
         else x["playing"]?.let { t ->
@@ -444,7 +467,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         const val INJECT = "com.cerniera.senso.INJECT"
         /** Cielo's rain, one row: starts_at (epoch ms), chance (0 to 1), mm. No row: no rain in sight. */
         val RAIN: Uri = Uri.parse("content://com.cerniera.cielo.rain/next")
-        const val INJECT_KEYS = "clear, at=HH:mm, rain_in, rain_chance, rain=none, event_in, event_title, event_where, event=none, " +
+        const val INJECT_KEYS = "clear, at=HH:mm, sunset_in=<min>, occasion=<title>|none, rain_in, rain_chance, rain=none, event_in, event_title, event_where, event=none, " +
             "playing=<title>, artist, player, paused, paused_ago, playing=none, headphones, headphones_ago, charging, charging_ago, " +
             "lux, unfolded, front, front_for, home=true|false|unknown, dismiss=<kind>, undismiss"
     }
