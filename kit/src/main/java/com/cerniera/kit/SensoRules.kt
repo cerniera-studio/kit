@@ -82,6 +82,8 @@ object Rules {
     const val OVERTAKE = 0.1f
 
     private const val MIN = 60_000L
+    /** How long a paused track still counts as listening (21 Nov 2026, from Momento on the Fold). */
+    const val PAUSE_GRACE = 10 * MIN
 
     /** Every moment the signals support, most certain first. Dismissed kinds are kept, marked. */
     fun read(s: Signals, now: Long, zone: ZoneId = ZoneId.systemDefault(), dismissed: Set<Kind> = emptySet()): List<Moment> =
@@ -167,6 +169,9 @@ object Rules {
             p.playing -> Moment(Kind.LISTENING, 0.62f, track, listOf("playing aloud · 0.62"))
             fresh && now - p.since < 30 * MIN -> Moment(Kind.LISTENING, 0.75f, "Resume $track",
                 listOf("headphones just in · paused ${((now - p.since) / MIN)} min ago · 0.75"))
+            // Just paused: the player stays in reach for a while, so it can be resumed where it was
+            now - p.since < PAUSE_GRACE -> Moment(Kind.LISTENING, 0.7f, "Paused: $track",
+                listOf("paused ${((now - p.since) / MIN)} min ago, kept for ${PAUSE_GRACE / MIN} · 0.70"))
             else -> null
         }
     }
