@@ -63,6 +63,8 @@ data class Signals(
     val homes: Set<String> = emptySet(),
     /** Today's first all-day event (a birthday, an anniversary), or null. */
     val occasion: SensoEvent? = null,
+    /** Partenza's leave-by for the next event with a place (24 Nov 2026), or null: none, or not hosted. */
+    val leave: Departure? = null,
 )
 
 /**
@@ -127,10 +129,15 @@ object Rules {
     private fun clock(t: Long, zone: ZoneId) = DateTimeFormatter.ofPattern("HH:mm").format(Instant.ofEpochMilli(t).atZone(zone))
     private fun f(v: Float) = String.format(java.util.Locale.UK, "%.2f", v)
 
-    /** Leaving soon: an event within 45 minutes, somewhere you would have to go. */
+    /**
+     * Leaving soon. With a Partenza estimate for the event (24 Nov 2026), timed to leave-by: from 45
+     * minutes before it, surest once it has come, until the event starts. Without one, as before:
+     * an event within 45 minutes, somewhere you would have to go.
+     */
     fun leaving(s: Signals, now: Long, zone: ZoneId): Moment? {
         val e = s.event ?: return null
         if (e.allDay) return null
+        PartenzaRules.current(s.leave, e, now)?.let { return leavingBy(it, now, zone, s.home) }
         val mins = (e.start - now) / MIN.toFloat()
         if (mins <= 0f || mins > 45f) return null
         val where = e.where?.trim().orEmpty()
@@ -141,8 +148,23 @@ object Rules {
         reasons += "${e.title} at ${clock(e.start, zone)}, in ${mins.roundToInt()} min · base ${f(c)}"
         if (where.isEmpty()) { c *= 0.6f; reasons += "no place given · ×0.60" }
         else { c += 0.08f; reasons += "at $where · +0.08" }
+        if (s.leave != null) reasons += "Partenza's estimate is for another event or out of date: the 45-minute rule"
         if (s.home == true) { c += 0.05f; reasons += "at home, so you'll leave · +0.05" }
         val line = "${e.title} at ${clock(e.start, zone)}" + if (where.isNotEmpty()) " · $where" else ""
+        return Moment(Kind.LEAVING_SOON, c.coerceIn(0f, 1f), line, reasons)
+    }
+
+    /** Leaving soon, timed to Partenza's leave-by rather than the event's start. */
+    private fun leavingBy(d: Departure, now: Long, zone: ZoneId, home: Boolean?): Moment? {
+        val mins = (d.leaveBy - now) / MIN.toFloat()
+        if (mins > 45f) return null
+        val reasons = mutableListOf<String>()
+        val traffic = if (d.delayMin > 0) ", ${d.delayMin} min of it traffic" else ""
+        reasons += "Partenza: leave ${clock(d.leaveBy, zone)} for ${d.title} ${clock(d.start, zone)} · ${d.driveMin} min drive$traffic + ${d.bufferMin} min buffer · checked ${clock(d.checkedAt, zone)}"
+        var c = if (mins > 0f) 0.62f + 0.3f * (1f - mins / 45f) else 0.95f
+        reasons += if (mins > 0f) "leave-by in ${mins.roundToInt()} min · base ${f(c)}" else "leave-by passed ${(-mins).roundToInt()} min ago · 0.95"
+        if (home == true && mins > 0f) { c += 0.03f; reasons += "at home, so you'll leave · +0.03" }
+        val line = if (mins > 0f) PartenzaRules.line(d, zone) else "Leave now · ${d.title} ${clock(d.start, zone)} · ${d.driveMin} min drive"
         return Moment(Kind.LEAVING_SOON, c.coerceIn(0f, 1f), line, reasons)
     }
 
