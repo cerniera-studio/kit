@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Senso reads Cielo's rain through this provider when Cielo shares it -->
+    <!-- Senso reads Cielo's rain through this provider when Cielo shares it, and Partenza's
+         leave-by from whichever app hosts it (Fold Widgets) -->
     <queries>
         <provider android:authorities="com.cerniera.cielo.rain" />
+        <provider android:authorities="com.cerniera.partenza" />
     </queries>
+
+    <application>
+        <!-- Partenza's re-checks and calendar watch: only ever scheduled by the app that hosts it -->
+        <service
+            android:name="com.cerniera.kit.PartenzaJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+    </application>
 </manifest>

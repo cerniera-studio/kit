@@ -79,6 +79,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
     private val faked = HashSet<String>()
     private var calendarState = "not read yet"
     private var rainState = "not read yet"
+    private var leaveState = "not read yet"
     private var lightState = "not read"
     private var fedFront = false
     private var fedPlaying = false
@@ -102,6 +103,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         runCatching { app.getSystemService(AudioManager::class.java)?.registerAudioDeviceCallback(audio, main) }
         runCatching { app.contentResolver.registerContentObserver(CalendarContract.Instances.CONTENT_URI, true, calendarObserver) }
         runCatching { app.contentResolver.registerContentObserver(RAIN, true, rainObserver) }
+        runCatching { app.contentResolver.registerContentObserver(Partenza.URI, true, leaveObserver) }
         if (injectable) {
             val f = IntentFilter(INJECT)
             runCatching {
@@ -109,7 +111,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
                 else @Suppress("UnspecifiedRegisterReceiverFlag") app.registerReceiver(injectReceiver, f, "android.permission.DUMP", null)
             }
         }
-        readCalendar(); readRain(); sampleLight()
+        readCalendar(); readRain(); readLeave(); sampleLight()
         recompute("started")
     }
 
@@ -122,6 +124,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         runCatching { app.getSystemService(AudioManager::class.java)?.unregisterAudioDeviceCallback(audio) }
         runCatching { app.contentResolver.unregisterContentObserver(calendarObserver) }
         runCatching { app.contentResolver.unregisterContentObserver(rainObserver) }
+        runCatching { app.contentResolver.unregisterContentObserver(leaveObserver) }
         stopLight()
     }
 
@@ -213,6 +216,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             occasion = pick("occasion", real.occasion, fake.occasion),
             rain = pick("rain", real.rain, fake.rain),
             home = pick("home", real.home, fake.home),
+            leave = pick("leave", real.leave, fake.leave),
             place = real.place,
             homes = real.homes,
         )
@@ -235,6 +239,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             Reading("Light", s.lux?.let { "${it.toInt()} lux" } ?: "Unknown", src("lux", lightState), null),
             Reading("Next event", s.event?.let { "${it.title} ${inMin(it.start)}" } ?: "None", src("event", calendarState), null),
             Reading("Occasion today", s.occasion?.title ?: "None", src("occasion", calendarState), null),
+            Reading("Leave by", s.leave?.let { "${time(it.leaveBy)} · ${it.driveMin} min drive · ${it.title}" } ?: "None", src("leave", leaveState), s.leave?.checkedAt),
             Reading("Rain", s.rain?.let { "${(it.chance * 100).toInt()}% ${inMin(it.startsAt)}" } ?: "None", src("rain", rainState), null),
             Reading("Home", yes(s.home), src("home", "Not known yet"), null),
             Reading("Sky over", s.place.name, "Kit.Sky", null),
@@ -260,6 +265,8 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         main.removeCallbacks(tick)
         val times = mutableListOf<Long>()
         signals.event?.let { e -> if (!e.allDay) { times += e.start - 45 * 60_000L; times += e.start } }
+        // Partenza: leaving soon begins 45 minutes before leave-by, and is surest at it
+        signals.leave?.let { d -> times += d.leaveBy - 45 * 60_000L; times += d.leaveBy; times += d.checkedAt + PartenzaRules.STALE }
         signals.rain?.let { r -> times += r.startsAt - 120 * 60_000L; times += r.startsAt - 60 * 60_000L; times += r.startsAt + 15 * 60_000L }
         // A moment that changes with time is re-read every five minutes while it lasts
         if (moments.any { it.kind != Kind.LISTENING }) times += now + 5 * 60_000L
@@ -303,6 +310,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
 
     private val calendarObserver = object : ContentObserver(main) { override fun onChange(self: Boolean) = readCalendar() }
     private val rainObserver = object : ContentObserver(main) { override fun onChange(self: Boolean) = readRain() }
+    private val leaveObserver = object : ContentObserver(main) { override fun onChange(self: Boolean) = readLeave() }
 
     private fun calendarAllowed() = app.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
@@ -360,6 +368,20 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             main.post {
                 rainState = if (r.isSuccess) "Cielo" else "Cielo unreadable"
                 real = real.copy(rain = r.getOrNull())
+                recompute(null)
+            }
+        }
+    }
+
+    /** Partenza's leave-by, from the app that hosts it (Fold Widgets), if it does. */
+    fun readLeave() {
+        val has = runCatching { app.packageManager.resolveContentProvider(Partenza.AUTHORITY, 0) != null }.getOrDefault(false)
+        if (!has) { leaveState = "Partenza not hosted"; real = real.copy(leave = null); return }
+        work.execute {
+            val r = runCatching { Partenza.read(app) }
+            main.post {
+                leaveState = if (r.isSuccess) "Partenza" else "Partenza unreadable"
+                real = real.copy(leave = r.getOrNull())
                 recompute(null)
             }
         }
@@ -433,6 +455,17 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
             val start = now + (m * 60_000).toLong()
             faked += "event"; fake = fake.copy(event = SensoEvent(x["event_title"] ?: "Event", start, start + 3600_000L, x["event_where"]?.ifBlank { null }))
         }
+        // Partenza: leave_in=<min> (leave-by from now) with drive=<min>, for the next event (event_in sets it)
+        if (none("leave")) { faked += "leave"; fake = fake.copy(leave = null) }
+        num("leave_in")?.let { m ->
+            val e = (if ("event" in faked) fake.event else real.event)
+            val by = now + (m * 60_000).toLong()
+            val drive = ((num("drive") ?: 30f) * 60).toInt()
+            val start = e?.start ?: (by + drive * 1000L + PartenzaRules.BUFFER_MIN * 60_000L)
+            faked += "leave"
+            fake = fake.copy(leave = Departure(e?.title ?: "Event", start, e?.where ?: "Somewhere", by, drive, ((num("delay") ?: 0f) * 60).toInt(),
+                drive * 15, PartenzaRules.BUFFER_MIN, now, "injected"))
+        }
         if (none("occasion")) { faked += "occasion"; fake = fake.copy(occasion = null) }
         else x["occasion"]?.let { t ->
             val day = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
@@ -468,6 +501,7 @@ class Senso(context: Context, val appName: String, val kinds: Set<Kind> = Kind.e
         /** Cielo's rain, one row: starts_at (epoch ms), chance (0 to 1), mm. No row: no rain in sight. */
         val RAIN: Uri = Uri.parse("content://com.cerniera.cielo.rain/next")
         const val INJECT_KEYS = "clear, at=HH:mm, sunset_in=<min>, occasion=<title>|none, rain_in, rain_chance, rain=none, event_in, event_title, event_where, event=none, " +
+            "leave_in=<min>, drive=<min>, delay=<min>, leave=none, " +
             "playing=<title>, artist, player, paused, paused_ago, playing=none, headphones, headphones_ago, charging, charging_ago, " +
             "lux, unfolded, front, front_for, home=true|false|unknown, dismiss=<kind>, undismiss"
     }

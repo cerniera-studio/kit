@@ -31,6 +31,24 @@ and pulled into every app. A change here reaches every app in its next build.
   - Injection, for the emulator, in apps that allow it: `adb shell am broadcast -a
     com.cerniera.senso.INJECT -p <package> --es rain_in 40 --es rain_chance 80` (keys in
     `Senso.INJECT_KEYS`). Only the shell can send it.
+- **Partenza** (24 Nov 2026): a live "leave by" for the next diary event with a place.
+  - `PartenzaRules.kt`: pure rules. Which events count (timed, somewhere you'd drive to, within a
+    day), leave by = start − drive in today's traffic − buffer (10 min unless changed), when to
+    re-check (from two hours before, or earlier for a long drive; 90, 60, 45, 30, 20, 15, 10, 5 and 0
+    minutes before leave-by; every five minutes after it until the start), whether to plan the
+    route to arrive on time or drive it now in live traffic, and the phases Momento and Lume will
+    draw from. Tested on the JVM.
+  - `Partenza.kt`: the reading. The calendar, the place (the phone's Geocoder, then TomTom's search),
+    where the phone is (coarse is enough; the last place seen if background location isn't allowed),
+    TomTom's Routing API by car with traffic, one-shot re-check jobs and a calendar watch
+    (`PartenzaJob`), and a log in `files/partenza.log` to live with before anything is drawn.
+    The TomTom key is entered in the host app's Settings and stays on the phone.
+  - One app hosts it (Fold Widgets) and declares `PartenzaProvider` at `content://com.cerniera.partenza/next`
+    (one row: title, starts_at, place, leave_by, drive_s, delay_s, length_m, buffer_min, checked_at,
+    from_place), readable only by the family's apps. `Partenza.read(context)` reads it from any app.
+  - Senso's leaving soon times itself to leave-by when a fresh estimate (under an hour old) exists
+    for the next event, and falls back to the 45-minute rule when there is none. Emulator:
+    `--es event_in 60 --es event_where "Park Row" --es leave_in 20 --es drive 30`.
 - **lab/**: a small app showing Senso's debug view. CI injects thirteen scenarios into it and
   checks what Senso offers (`.github/senso.sh`); screenshots go to the `screens` branch. Apps take
   the Kit as `kit/kit`, so they never build the lab.
