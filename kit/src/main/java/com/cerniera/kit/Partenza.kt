@@ -63,10 +63,14 @@ object Partenza {
 
     // ---- Settings -------------------------------------------------------------------------
 
-    fun key(c: Context): String? = prefs(c).getString("tomtom_key", null)?.trim()?.ifEmpty { null }
-    fun setKey(c: Context, k: String?) {
-        prefs(c).edit().apply { if (k.isNullOrBlank()) remove("tomtom_key") else putString("tomtom_key", k.trim()) }.apply()
-        log(c, if (k.isNullOrBlank()) "TomTom key removed: Partenza off" else "TomTom key set")
+    fun key(c: Context): String? = clean(prefs(c).getString("tomtom_key", null))
+    /** A pasted key, without spaces, line breaks or the invisible characters a copy can carry. */
+    fun clean(k: String?): String? = k?.replace(Regex("[\\s\\p{C}\\p{Z}]"), "")?.ifEmpty { null }
+
+    fun setKey(c: Context, raw: String?) {
+        val k = clean(raw)
+        prefs(c).edit().apply { if (k == null) remove("tomtom_key") else putString("tomtom_key", k) }.apply()
+        log(c, if (k == null) "TomTom key removed: Partenza off" else "TomTom key set (${k.length} characters, ending ${k.takeLast(4)})")
         schedule(c, now = true)
     }
 
@@ -342,6 +346,7 @@ object Partenza {
             val body = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull().orEmpty()
             val detail = runCatching { JSONObject(body).getJSONObject("detailedError").getString("message") }.getOrNull()
             error(when (code) {
+                401 -> "TomTom didn't accept the key (401): copy it again from developer.tomtom.com → Keys, and check the Routing API is on for it"
                 403 -> "TomTom refused the key (403): check it in Settings"
                 429 -> "TomTom's daily allowance is used up (429)"
                 400 -> "TomTom $what: ${detail ?: "no route between here and there"} (400)"
