@@ -166,11 +166,14 @@ object Partenza {
             .build())
     }
 
-    /** Any change to the calendar: look again (a new event, a moved one, a place added). */
+    /**
+     * Any change to the calendar: look again (a new event, a moved one, a place added). A content
+     * job fires once, so it is set again every time, unconditionally: a running job still counts as
+     * pending, and checking for it first left the watch lapsed after its first change (25 Nov 2026).
+     */
     private fun watchCalendar(c: Context) {
         val js = c.getSystemService(JobScheduler::class.java) ?: return
         if (!calendarAllowed(c)) return
-        if (js.getPendingJob(JOB_CALENDAR) != null) return
         js.schedule(JobInfo.Builder(JOB_CALENDAR, ComponentName(c, PartenzaJob::class.java))
             .addTriggerContentUri(JobInfo.TriggerContentUri(CalendarContract.CONTENT_URI, JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
             .setTriggerContentUpdateDelay(10_000L)
@@ -179,8 +182,20 @@ object Partenza {
     }
 
     internal fun ran(c: Context, jobId: Int) {
-        if (jobId == JOB_CALENDAR) watchCalendar(c)
         check(c, if (jobId == JOB_CALENDAR) "calendar changed" else "re-check")
+        // Set again once the check is done (setting it while it runs would stop it)
+        if (jobId == JOB_CALENDAR) watchCalendar(c)
+    }
+
+    /**
+     * The calendar changed, as seen by the host app's own watch (Fold Widgets' agenda job, which
+     * One UI already lets run). Checked unless a check ran in the last minute, so one change is
+     * never routed twice.
+     */
+    fun calendarChanged(c: Context) {
+        if (!on(c)) return
+        if (System.currentTimeMillis() - prefs(c).getLong("last_check", 0L) < MIN) return
+        check(c, "calendar changed")
     }
 
     // ---- One check -----------------------------------------------------------------------------
@@ -189,6 +204,8 @@ object Partenza {
     fun check(c: Context, why: String) = synchronized(this) {
         val now = System.currentTimeMillis()
         val key = key(c) ?: return
+        prefs(c).edit().putLong("last_check", now).apply()
+        log(c, "Checking ($why)")
         val buffer = buffer(c)
         if (!calendarAllowed(c)) { log(c, "No calendar access"); save(c, null); at(c, now + 6 * 60 * MIN); return }
         val event = PartenzaRules.next(events(c, now), now)
