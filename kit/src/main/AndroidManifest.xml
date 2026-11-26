@@ -5,6 +5,8 @@
     <queries>
         <provider android:authorities="com.cerniera.cielo.rain" />
         <provider android:authorities="com.cerniera.partenza" />
+        <!-- The family look (26 Nov 2026): every app's widgets wear Fold Widgets' look (Family.kt) -->
+        <provider android:authorities="com.fergusonconsultancy.foldwidgets.look" />
     </queries>
 
     <application>
