@@ -133,7 +133,8 @@ object Backdrop {
         bmp
     }
 
-    private fun systemWallpaper(c: Context): Bitmap? = runCatching {
+    /** The system wallpaper itself, at most 1080 px on its longest side; null without all-files access. */
+    fun systemWallpaper(c: Context): Bitmap? = runCatching {
         if (!canReadWallpaper()) return null
         val d = WallpaperManager.getInstance(c).drawable ?: return null
         val src = (d as? BitmapDrawable)?.bitmap

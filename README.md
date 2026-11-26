@@ -31,6 +31,16 @@ and pulled into every app. A change here reaches every app in its next build.
   - Injection, for the emulator, in apps that allow it: `adb shell am broadcast -a
     com.cerniera.senso.INJECT -p <package> --es rain_in 40 --es rain_chance 80` (keys in
     `Senso.INJECT_KEYS`). Only the shell can send it.
+- **Family** (26 Nov 2026): one look for every Cerniera widget. Fold Widgets is where the finish,
+  corners and glass images are chosen; every other app's widget wears them through `Family.redraw`
+  (or `Family.look`, `Family.seats`, `Family.ground`), so there is one copy of the follower code.
+  - The look is read on every draw. If Fold Widgets can't answer, the last look it gave is kept;
+    an app's own choice applies only without Fold Widgets (`FamilyRules.decide`, JVM-tested).
+  - The glass's picture comes from Fold Widgets (its chosen image, else a still of the system
+    wallpaper), versioned by the look's stamp, so no follower needs all-files access.
+  - Places come from Fold Widgets' live mode at `content://…look/seats/<package>`.
+  - To join: declare a receiver for `com.cerniera.LOOK_CHANGED` (Fold Widgets finds every app that
+    does and tells it) and name the widget's picture view `root` (live mode finds it by that name).
 - **Partenza** (24 Nov 2026): a live "leave by" for the next diary event with a place.
   - `PartenzaRules.kt`: pure rules. Which events count (timed, somewhere you'd drive to, within a
     day), leave by = start − drive in today's traffic − buffer (10 min unless changed), when to
