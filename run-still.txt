@@ -1,0 +1,57 @@
+installed Dorso.apk
+installed FoldWidgets.apk
+installed Nodo.apk
+installed Riserva.apk
+installed Settimana.apk
+installed Solco.apk
+installed banco-debug.apk
+home: com.cerniera.banco/.Bench
+widget bitmap limit is set at boot from the display: Physical size: 1968x2520 
+calendar 1 seeded from Fri Nov 27 00:00:00 UTC 2026: 7 events
+providers:
+com.cerniera.dorso/.Nightstand	100x170	On the nightstand
+com.fergusonconsultancy.foldwidgets/.MusicCompact	192x164	Music
+com.fergusonconsultancy.foldwidgets/.MusicSmall	255x164	Music · Wide
+com.fergusonconsultancy.foldwidgets/.MusicLarge	255x267	Music · Poster
+com.fergusonconsultancy.foldwidgets/.AgendaLarge	255x361	Agenda · Detailed
+com.fergusonconsultancy.foldwidgets/.AgendaSmall	255x267	Agenda · List
+com.fergusonconsultancy.foldwidgets/.WeatherSmall	255x164	Weather · Today
+com.fergusonconsultancy.foldwidgets/.WeatherLarge	255x361	Weather · Forecast
+com.fergusonconsultancy.foldwidgets/.MonthSmall	190x164	Month · Compact
+com.fergusonconsultancy.foldwidgets/.MonthLarge	255x267	Month · Full
+com.fergusonconsultancy.foldwidgets/.MomentoWidget	255x270	Momento
+com.cerniera.nodo/.NodoWidget	250x110	Nodo · Thread
+com.cerniera.riserva/.GaugeWidget	110x50	Riserva gauge
+com.cerniera.settimana/.WeekWidget	250x110	Settimana: the week
+finish: Vetro frost
+finish: Cristallo clear
+finish: Goccia liquid
+finish: Smoked glass
+finish: Membrane
+finish: Rosso lacquer
+finish: Avorio
+finish: Carbonio
+finish: Ceramica
+finish: Visconti
+finish: Paper
+finish: Ottone
+finish: Vetro frost
+finish: Cristallo clear
+finish: Goccia liquid
+finish: Smoked glass
+finish: Membrane
+finish: Rosso lacquer
+finish: Avorio
+finish: Carbonio
+finish: Ceramica
+finish: Visconti
+finish: Paper
+finish: Ottone
+finish: Vetro frost
+finish: Cristallo clear
+finish: Goccia liquid
+finish: Smoked glass
+finish: Rosso lacquer
+finish: Ceramica
+finish: Ottone
+done

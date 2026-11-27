@@ -1,0 +1,7 @@
+branch: solco-still
+fold-widgets build-130
+nodo build-87
+Dorso build-97
+Riserva build-25
+settimana build-29
+Solco build-62
