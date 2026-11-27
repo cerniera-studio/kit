@@ -33,7 +33,10 @@ adb shell settings put secure enabled_accessibility_services $FW/$FW.LiveService
 adb shell settings put secure accessibility_enabled 1
 adb emu geo fix -1.5491 53.8008 >/dev/null 2>&1
 adb shell appwidget grantbind --package $B --user 0
-adb shell cmd package set-home-activity $B/.Bench >/dev/null 2>&1
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher >/dev/null 2>&1
+adb shell cmd package set-home-activity --user 0 $B/.Bench
+log "home: $(adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1)"
+log "widget bitmap limit is set at boot from the display: $(adb shell wm size | tr '\n' ' ')"
 
 # A calendar with the kind of titles Mechack's has: long, specific, some all-day
 sh_ content insert --uri "content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=audit&account_type=LOCAL" \
@@ -70,11 +73,11 @@ cmd() { # waits for Banco to finish a command
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
 tap_text() { # taps the first view whose text or description is $1, scrolling down to find it
   local want="$1" i b
-  for i in $(seq 1 14); do
+  for i in $(seq 1 40); do
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
     b=$(adb shell cat /sdcard/ui.xml | tr '>' '\n' | grep -E "(text|content-desc)=\"$want\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
     if [ -n "$b" ]; then set -- $b; adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 )); return 0; fi
-    adb shell input swipe 500 1500 500 700 250; sleep 0.6
+    adb shell input swipe 500 1700 500 500 300; sleep 0.8
   done
   return 1
 }
@@ -93,9 +96,9 @@ MOL=$(P "/.MonthLarge"); MOM=$(P "/.MomentoWidget"); NODO=$(P "^com.cerniera.nod
 # The wallpaper
 case $WALL in
   still|pattern)
-    adb push walls/$WALL.png $BF/$WALL.png >/dev/null
-    # Pushed files belong to the shell: hand it to Banco so it can read it
-    adb shell chown "$(adb shell stat -c %u:%g $BF | tr -d '\r')" $BF/$WALL.png; adb shell chmod 666 $BF/$WALL.png
+    # Into Banco's own files, through run-as, so it can read it
+    adb push walls/$WALL.png /data/local/tmp/$WALL.png >/dev/null; adb shell chmod 644 /data/local/tmp/$WALL.png
+    adb shell run-as $B sh -c "'mkdir -p files && cp /data/local/tmp/$WALL.png files/$WALL.png'"
     cmd --es cmd wall --es file $WALL.png ;;
   live)
     adb shell am start -a android.service.wallpaper.CHANGE_LIVE_WALLPAPER \
@@ -112,7 +115,7 @@ SLOT_FINISHES=("Vetro frost" "Cristallo clear" "Goccia liquid" "Smoked glass" "R
 
 finish() {
   adb shell am start -n $FW/.SettingsActivity >/dev/null; sleep 3
-  tap_text "$1" && log "finish: $1" || log "finish NOT FOUND: $1"
+  if tap_text "$1"; then log "finish: $1"; else log "finish NOT FOUND: $1"; adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml "$OUT/ui-notfound-$WALL.xml" >/dev/null 2>&1; shot "notfound-$WALL"; fi
   sleep 2; adb shell input keyevent KEYCODE_HOME; sleep 1
 }
 # Places a scene, lets the apps draw and live mode take its photograph, then photographs it

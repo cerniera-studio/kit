@@ -76,7 +76,7 @@ class Bench : Activity() {
     }
 
     private fun wall(name: String) {
-        val f = File(getExternalFilesDir(null), name)
+        val f = File(filesDir, name).takeIf { it.exists() } ?: File(getExternalFilesDir(null), name)
         f.inputStream().use { WallpaperManager.getInstance(this).setStream(it, null, true, WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK) }
     }
 
