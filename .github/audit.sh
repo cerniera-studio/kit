@@ -149,5 +149,7 @@ for F in "${SLOT_FINISHES[@]}"; do
     n=${w%%|*}; scene "$WALL-slot-$f-$n" "$n|${w#*|}|287|335|255|164"
   done
 done
-adb logcat -d -s Cerniera:I FoldWidgets:I Nodo:I Banco:I > $OUT/log-$WALL.txt 2>/dev/null
+adb logcat -d -s Cerniera:I FoldWidgets:I Nodo:I Banco:I Dorso:I Riserva:I Settimana:I > $OUT/log-$WALL.txt 2>/dev/null
+adb logcat -d "*:E" | grep -E "cerniera|foldwidgets|AppWidget|RemoteViews" > $OUT/errors-$WALL.txt 2>/dev/null
+adb logcat -b crash -d > $OUT/crash-$WALL.txt 2>/dev/null
 log "done"

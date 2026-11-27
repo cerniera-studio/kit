@@ -32,7 +32,7 @@ jobs:
           cat audit/out/faults.md >> "$GITHUB_STEP_SUMMARY"
       - name: Publish to the audit-screens branch
         run: |
-          mkdir pub && cp audit/out/* pub/; cp audit/*/run-*.txt audit/*/versions.txt audit/*/picker-*.png audit/*/log-*.txt pub/ 2>/dev/null || true
+          mkdir pub && cp audit/out/* pub/; cp audit/*/run-*.txt audit/*/versions.txt audit/*/picker-*.png audit/*/log-*.txt audit/*/errors-*.txt audit/*/crash-*.txt audit/*/ui-notfound-*.xml pub/ 2>/dev/null || true
           mkdir -p pub/shots && cp audit/audit-*/*.png pub/shots/ 2>/dev/null || true
           cd pub
           git init -q -b audit-screens
