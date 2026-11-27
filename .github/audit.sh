@@ -12,6 +12,9 @@ B=com.cerniera.banco
 BF=/sdcard/Android/data/$B/files
 SEQ=0
 log() { echo "$*" | tee -a $OUT/run-$WALL.txt; }
+# adb shell joins its arguments for the phone's shell: quote each one so | ; ( and spaces survive
+q() { local a out=""; for a in "$@"; do out="$out '${a//\'/}'"; done; printf '%s' "$out"; }
+sh_() { adb shell "$(q "$@")"; }
 
 adb root >/dev/null 2>&1; sleep 3; adb wait-for-device
 adb shell setprop persist.sys.timezone Europe/London
@@ -33,7 +36,7 @@ adb shell appwidget grantbind --package $B --user 0
 adb shell cmd package set-home-activity $B/.Bench >/dev/null 2>&1
 
 # A calendar with the kind of titles Mechack's has: long, specific, some all-day
-adb shell content insert --uri "content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=audit&account_type=LOCAL" \
+sh_ content insert --uri "content://com.android.calendar/calendars?caller_is_syncadapter=true&account_name=audit&account_type=LOCAL" \
   --bind account_name:s:audit --bind account_type:s:LOCAL --bind name:s:Audit --bind calendar_displayName:s:Audit \
   --bind calendar_color:i:-1689775 --bind calendar_access_level:i:700 --bind ownerAccount:s:audit --bind visible:i:1 --bind sync_events:i:1
 CAL=$(adb shell content query --uri content://com.android.calendar/calendars --projection _id | grep -o '_id=[0-9]*' | tail -1 | cut -d= -f2)
@@ -41,10 +44,10 @@ DAY0=$(( ($(adb shell date +%s | tr -d '\r') / 86400) * 86400 ))
 ev() { # day-offset hour minute duration-min title [allday]
   local s=$(( (DAY0 + $1 * 86400 + $2 * 3600 + $3 * 60) * 1000 )) e
   if [ "${6:-}" = allday ]; then s=$(( (DAY0 + $1 * 86400) * 1000 )); e=$(( s + 86400000 ))
-    adb shell content insert --uri content://com.android.calendar/events --bind calendar_id:i:$CAL --bind dtstart:l:$s --bind dtend:l:$e \
+    sh_ content insert --uri content://com.android.calendar/events --bind calendar_id:i:$CAL --bind dtstart:l:$s --bind dtend:l:$e \
       --bind allDay:i:1 --bind eventTimezone:s:UTC --bind "title:s:$5" >/dev/null
   else e=$(( s + $4 * 60000 ))
-    adb shell content insert --uri content://com.android.calendar/events --bind calendar_id:i:$CAL --bind dtstart:l:$s --bind dtend:l:$e \
+    sh_ content insert --uri content://com.android.calendar/events --bind calendar_id:i:$CAL --bind dtstart:l:$s --bind dtend:l:$e \
       --bind eventTimezone:s:Europe/London --bind "title:s:$5" >/dev/null
   fi
 }
@@ -56,11 +59,11 @@ ev 2 16 30 120 "Arsenal vs Manchester United - Premier League, Emirates Stadium"
 ev 3 19 0 120 "Blackburn Rovers vs Leeds United - Championship, Ewood Park"
 ev 4 9 30 30 "Dentist"
 ev 5 18 30 90 "Five-a-side at Goals Leeds"
-log "calendar $CAL seeded from $(date -u -d @$DAY0)"
+log "calendar $CAL seeded from $(date -u -d @$DAY0): $(adb shell content query --uri content://com.android.calendar/events --projection title | grep -c Row) events"
 
 cmd() { # waits for Banco to finish a command
   SEQ=$((SEQ + 1)); adb shell rm -f $BF/done-$SEQ >/dev/null 2>&1
-  adb shell am start -n $B/.Bench --es seq $SEQ "$@" >/dev/null
+  sh_ am start -n $B/.Bench --es seq $SEQ "$@" >/dev/null
   for i in $(seq 1 40); do adb shell "[ -f $BF/done-$SEQ ]" && break; sleep 0.5; done
   adb shell "[ -f $BF/error-$SEQ ]" && log "Banco error: $(adb shell cat $BF/error-$SEQ | head -3)"
 }
@@ -91,6 +94,8 @@ MOL=$(P "/.MonthLarge"); MOM=$(P "/.MomentoWidget"); NODO=$(P "^com.cerniera.nod
 case $WALL in
   still|pattern)
     adb push walls/$WALL.png $BF/$WALL.png >/dev/null
+    # Pushed files belong to the shell: hand it to Banco so it can read it
+    adb shell chown "$(adb shell stat -c %u:%g $BF | tr -d '\r')" $BF/$WALL.png; adb shell chmod 666 $BF/$WALL.png
     cmd --es cmd wall --es file $WALL.png ;;
   live)
     adb shell am start -a android.service.wallpaper.CHANGE_LIVE_WALLPAPER \
