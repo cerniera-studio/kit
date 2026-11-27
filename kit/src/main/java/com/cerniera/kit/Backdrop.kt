@@ -58,8 +58,30 @@ object Backdrop {
      */
     class LiveView(val ox: Float, val oy: Float, val gain: FloatArray?, val screenW: Int, val screenH: Int)
 
-    /** The seat of widget [id], from the app's own [store] of seats. */
+    /** The seat of widget [id] last measured on any screen, from the app's own [store] of seats. */
     fun seat(store: SharedPreferences, id: Int): Seat? = Seat.decode(store.getString("seat_$id", null))
+
+    // A seat per screen as well (27 Nov 2026). Smart Launcher shows one widget on both of the Fold's
+    // screens, and a single seat measured on one was lost on the other each time the phone was folded
+    // or opened (Mechack's size report: "measured on the other screen"), until the next tap.
+    private fun screenKey(id: Int, w: Int, h: Int) = "seat_$id@${w}x$h"
+
+    /** The seat of widget [id] on the screen in use now, else the last one measured on any screen. */
+    fun seat(c: Context, store: SharedPreferences, id: Int): Seat? {
+        val s = screenSize(c)
+        return Seat.decode(store.getString(screenKey(id, s.x, s.y), null)) ?: seat(store, id)
+    }
+
+    /** Keeps [seat] for widget [id], as the latest and as the one for its own screen. */
+    fun put(e: SharedPreferences.Editor, id: Int, seat: Seat): SharedPreferences.Editor =
+        seat.encode().let { e.putString("seat_$id", it).putString(screenKey(id, seat.screenW, seat.screenH), it) }
+
+    /** Forgets every seat of widget [id], on every screen. */
+    fun forget(store: SharedPreferences, id: Int) {
+        val e = store.edit().remove("seat_$id")
+        store.all.keys.filter { it.startsWith("seat_$id@") }.forEach { e.remove(it) }
+        e.apply()
+    }
 
     /**
      * Records where widget [id] sits, from a tap's [intent]. Its source bounds are the tapped area's
@@ -72,7 +94,7 @@ object Backdrop {
         val b = intent.sourceBounds ?: return false
         if (b.width() <= 0) return false
         val screen = screenSize(c)
-        val old = seat(store, id)
+        val old = seat(c, store, id)
         val seat = if (root) Seat(b.left.toFloat(), b.top.toFloat(), b.width().toFloat(), b.height().toFloat(), screen.x, screen.y, true, reported.width, reported.height) else {
             if (hit == null || sizeDp == null || hit.width() <= 0f) return false
             val d = density(c)
@@ -83,7 +105,7 @@ object Backdrop {
         val moved = old == null || old.screenW != seat.screenW || old.screenH != seat.screenH || old.exact != seat.exact ||
             Math.abs(old.left - seat.left) > 2f || Math.abs(old.top - seat.top) > 2f ||
             Math.abs(old.width - seat.width) > 1f || Math.abs(old.height - seat.height) > 1f
-        if (moved) store.edit().putString("seat_$id", seat.encode()).apply()
+        if (moved) put(store.edit(), id, seat).apply()
         return moved
     }
 
@@ -182,7 +204,7 @@ object Backdrop {
     fun ground(c: Context, store: SharedPreferences, id: Int, liveView: LiveView? = null): Ground {
         // A seat belongs to the screen and orientation it was measured on (12 Nov)
         val now = screenSize(c)
-        val seat = seat(store, id)?.takeIf { it.screenW == now.x && it.screenH == now.y }
+        val seat = seat(c, store, id)?.takeIf { it.screenW == now.x && it.screenH == now.y }
         val wall = wallpaper(c, store, seat)
         // An app that knows where the launcher has the wallpaper on this widget's page, and its tint
         // (Fold Widgets' live mode), passes it in

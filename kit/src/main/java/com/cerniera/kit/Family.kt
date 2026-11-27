@@ -115,14 +115,14 @@ object Family {
         if (here.isEmpty()) return
         val d = Backdrop.density(c)
         val placed = FamilyRules.assign(here, ids.toList()) { s, id ->
-            val old = Backdrop.seat(store, id)
+            val old = Backdrop.seat(c, store, id)
             if (old != null && old.screenW == s.sw && old.screenH == s.sh)
                 Math.abs(old.left - s.l) + Math.abs(old.top - s.t) + 3f * (Math.abs(old.width - s.w) + Math.abs(old.height - s.h))
             else 400f + 3f * (sizesDp(id).minOfOrNull { Math.abs(it.width * d - s.w) + Math.abs(it.height * d - s.h) } ?: 400f)
         }
         val e = store.edit()
         for ((id, s) in placed) {
-            e.putString("seat_$id", Backdrop.Seat(s.l, s.t, s.w, s.h, s.sw, s.sh, true).encode())
+            Backdrop.put(e, id, Backdrop.Seat(s.l, s.t, s.w, s.h, s.sw, s.sh, true))
             s.live?.let { v -> val g = v.gain ?: floatArrayOf(1f, 1f, 1f); e.putString("live_$id", listOf(v.ox, v.oy, g[0], g[1], g[2], v.screenW, v.screenH).joinToString(",")) }
                 ?: e.remove("live_$id")
         }
