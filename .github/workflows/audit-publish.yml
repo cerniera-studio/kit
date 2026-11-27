@@ -1,0 +1,41 @@
+name: Widget audit, publish a run
+
+# Re-makes the sheets and faults.md from an earlier audit run's photographs, and publishes them.
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: The Widget audit run id
+        required: true
+  push:
+    branches: [audit-publish]
+
+jobs:
+  sheets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: audit-*
+          path: audit
+          run-id: ${{ github.event.inputs.run || '45926968086' }}
+          github-token: ${{ github.token }}
+      - name: Sheets and checks
+        run: |
+          rm -rf audit/audit-sheets
+          pip install --quiet pillow
+          python3 .github/audit_sheet.py audit
+          cat audit/out/faults.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish to the audit-screens branch
+        run: |
+          mkdir pub && cp audit/out/* pub/; cp audit/*/run-*.txt audit/*/versions.txt audit/*/picker-*.png audit/*/log-*.txt pub/ 2>/dev/null || true
+          mkdir -p pub/shots && cp audit/audit-*/*.png pub/shots/ 2>/dev/null || true
+          cd pub
+          git init -q -b audit-screens
+          git config user.name "Widget audit"; git config user.email "actions@users.noreply.github.com"
+          git add -A && git commit -qm "Widget audit sheets"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" audit-screens
