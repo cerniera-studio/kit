@@ -31,6 +31,15 @@ and pulled into every app. A change here reaches every app in its next build.
   - Injection, for the emulator, in apps that allow it: `adb shell am broadcast -a
     com.cerniera.senso.INJECT -p <package> --es rain_in 40 --es rain_chance 80` (keys in
     `Senso.INJECT_KEYS`). Only the shell can send it.
+- **One ground and WidgetBudget** (27 Nov 2026, from the widget audit):
+  - Solid finishes (everything but Vetro, Cristallo and Goccia) take their tone from the wallpaper
+    as a whole (`Ground.family`), the same colour in every app, so two widgets in one finish match
+    wherever they sit. Before, a widget whose place was known took the slice behind it and one
+    whose place wasn't took the overall colour, and the two came out in different tones.
+  - Over a live wallpaper the image Android hands out is stale or stock, so it is no longer read
+    (`Backdrop.liveWallpaper`).
+  - `WidgetBudget.send`: an update Android refuses for its size (its cap is set at boot from the
+    screen then in use) is redrawn within the cap and sent again, never silently dropped.
 - **Family** (26 Nov 2026): one look for every Cerniera widget. Fold Widgets is where the finish,
   corners and glass images are chosen; every other app's widget wears them through `Family.redraw`
   (or `Family.look`, `Family.seats`, `Family.ground`), so there is one copy of the follower code.

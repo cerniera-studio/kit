@@ -116,6 +116,24 @@ object Grammar {
     }
 
     /** Whether every word of [s] fits [width] and the whole fits in [lines] lines. */
+    /**
+     * [s] on one line of [width], cut only between words, with an ellipsis if words are left out;
+     * null when not even its first word fits whole (27 Nov 2026). "Whole words only" (rule 4): the
+     * caller then shows something else (a count, a shorter label) rather than "Arsena…" or "UP NE…".
+     */
+    fun words(s: String, p: TextPaint, width: Float): String? {
+        val all = s.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (all.isEmpty()) return ""
+        if (p.measureText(s.trim()) <= width) return s.trim()
+        var n = all.size - 1
+        while (n >= 1) {
+            val t = all.take(n).joinToString(" ").trimEnd(',', ';', ':', '-', '–', '—', '·') + "…"
+            if (p.measureText(t) <= width) return t
+            n--
+        }
+        return null
+    }
+
     fun fitsWhole(s: String, p: TextPaint, width: Float, lines: Int): Boolean {
         val words = s.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
         if (words.any { p.measureText(it) > width }) return false
@@ -156,7 +174,9 @@ object Grammar {
     /** The label that opens a widget (rule 5), its capitals' top at [top]. Returns where the next block may begin. */
     fun eyebrow(c: Context, cv: Canvas, s: Surface, text: String, x: Float, top: Float, width: Float, k: Float): Float {
         val p = label(c, k, s.muted(x + width / 2, top + 6f * k))
-        cv.top(fit(text.uppercase(), p, width), x, top, p)
+        // Whole words only (27 Nov 2026): a label that doesn't fit is left out, never cut to "UP NE…"
+        val t = words(text.uppercase(), p, width) ?: return top
+        cv.top(t, x, top, p)
         return top + cap(p) + GAP * k
     }
 

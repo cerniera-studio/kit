@@ -116,6 +116,9 @@ object Backdrop {
     /** Forgets the wallpaper, after it changes. */
     fun invalidate() = synchronized(this) { cached = null; cachedKey = null }
 
+    /** Whether a live wallpaper is showing, which no app can take a picture of. */
+    fun liveWallpaper(c: Context): Boolean = runCatching { WallpaperManager.getInstance(c).wallpaperInfo != null }.getOrDefault(false)
+
     /** Whether the wallpaper image itself can be read: Android 13 and later ask for all-files access. */
     fun canReadWallpaper(): Boolean = Environment.isExternalStorageManager()
 
@@ -136,6 +139,10 @@ object Backdrop {
     /** The system wallpaper itself, at most 1080 px on its longest side; null without all-files access. */
     fun systemWallpaper(c: Context): Bitmap? = runCatching {
         if (!canReadWallpaper()) return null
+        // A live wallpaper (Solco, Tapet's live mode) draws itself: the image Android hands out then
+        // is a stale or stock picture, not what is on screen (27 Nov 2026). Glass over it shows the
+        // real wallpaper through its veil instead, and solid finishes take the live one's own colours.
+        if (liveWallpaper(c)) return null
         val d = WallpaperManager.getInstance(c).drawable ?: return null
         val src = (d as? BitmapDrawable)?.bitmap
         if (src != null) shrink(src, 1080) else {
@@ -173,8 +180,9 @@ object Backdrop {
         // An app that knows where the launcher has the wallpaper on this widget's page, and its tint
         // (Fold Widgets' live mode), passes it in
         val live = liveView?.takeIf { seat != null && it.screenW == seat.screenW && it.screenH == seat.screenH }
-        if (seat != null && wall != null) slice(wall, seat, live)?.let { return it }
-        return Ground.flat(wallpaperColour(c))
+        val family = wallpaperColour(c)
+        if (seat != null && wall != null) slice(wall, seat, live, family)?.let { return it }
+        return Ground.flat(family)
     }
 
     /**
@@ -183,7 +191,7 @@ object Backdrop {
      * it, so the screen sees the middle of the image at that scale. Beyond the wallpaper's own
      * edges the outermost pixels repeat.
      */
-    private fun slice(wall: Bitmap, seat: Seat, live: LiveView? = null): Ground? {
+    private fun slice(wall: Bitmap, seat: Seat, live: LiveView? = null, family: Int? = null): Ground? {
         if (seat.width < 2f || seat.height < 2f) return null
         val sw = seat.screenW.toFloat(); val sh = seat.screenH.toFloat()
         val scale = maxOf(sw / wall.width, sh / wall.height)
@@ -205,7 +213,7 @@ object Backdrop {
             // The launcher's own tint over the wallpaper (One UI dims it in dark mode), as measured
             live?.gain?.let { g -> colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setScale(g[0], g[1], g[2], 1f) }) }
         })
-        return Ground.of(out, (margin * s).toInt(), true)
+        return Ground.of(out, (margin * s).toInt(), true, family)
     }
 
     /**
@@ -243,7 +251,9 @@ object Backdrop {
  * right behind the type, so legibility is judged against both, never the mean alone.
  */
 class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean,
-                                 val bright: IntArray = zones, val dark: IntArray = zones, val sharp: Bitmap? = null) {
+                                 val bright: IntArray = zones, val dark: IntArray = zones, val sharp: Bitmap? = null,
+                                 /** The wallpaper's own colour, the same in every app (27 Nov 2026): what solid finishes take their tone from. */
+                                 val family: Int = zones[0]) {
     /** The zone colour nearest a point given as fractions of the widget's width and height. */
     fun at(fx: Float, fy: Float): Int {
         val x = (fx * COLS).toInt().coerceIn(0, COLS - 1)
@@ -255,10 +265,10 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
         const val COLS = 4
         const val ROWS = 4
 
-        fun flat(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false)
+        fun flat(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false, family = colour)
 
         /** From a picture of the ground reaching [margin] px beyond the widget on every side. */
-        fun of(picture: Bitmap, margin: Int = 0, seated: Boolean = true): Ground {
+        fun of(picture: Bitmap, margin: Int = 0, seated: Boolean = true, family: Int? = null): Ground {
             val inner = Bitmap.createBitmap(picture, margin, margin,
                 (picture.width - 2 * margin).coerceAtLeast(1), (picture.height - 2 * margin).coerceAtLeast(1))
             val w = inner.width; val h = inner.height
@@ -299,7 +309,8 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
             val frost = Bitmap.createBitmap(soft, fm.coerceAtMost(soft.width - 2), fm.coerceAtMost(soft.height - 2),
                 (soft.width - 2 * fm).coerceAtLeast(2), (soft.height - 2 * fm).coerceAtLeast(2))
             // Sharp: the picture untouched, for Goccia, whose drop shows the wallpaper crisp
-            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated, bright, dark, picture)
+            return Ground(frost, Blur.frost(picture, 2), margin, zones, seated, bright, dark, picture,
+                family ?: Color.rgb(zones.sumOf { Color.red(it) } / zones.size, zones.sumOf { Color.green(it) } / zones.size, zones.sumOf { Color.blue(it) } / zones.size))
         }
     }
 }

@@ -23,7 +23,17 @@ import android.graphics.Shader
  */
 class Surface(val finish: Finish, val ground: Ground, val w: Float, val h: Float, val radius: Float, val hairline: Float) {
 
-    private val faces: Array<Face> = legibleFaces(finish, ground, throughBlur = finish == Finish.VETRO && ground.seated && ground.frost != null)
+    /**
+     * What the finish is judged and tinted against (27 Nov 2026). Glass shows what is behind it, so
+     * it reads the widget's own slice of wallpaper. Every other finish takes its tone from the
+     * wallpaper as a whole, the same colour in every app, so two widgets in the same finish match
+     * wherever they sit and whether or not their place is known yet. Before, a solid finish took a
+     * trace of the slice behind it when the widget's place was known and the wallpaper's overall
+     * colour when it wasn't, so Rosso, Smoked and Ceramica came out in different tones side by side.
+     */
+    private val g: Ground = if (glassy) ground else Ground.flat(ground.family)
+
+    private val faces: Array<Face> = legibleFaces(finish, g, throughBlur = finish == Finish.VETRO && g.seated && g.frost != null)
 
     /** The face under a point, as fractions of the widget's width and height. */
     fun faceAt(fx: Float, fy: Float): Face {
