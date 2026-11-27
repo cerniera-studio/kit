@@ -116,8 +116,12 @@ object Backdrop {
     /** Forgets the wallpaper, after it changes. */
     fun invalidate() = synchronized(this) { cached = null; cachedKey = null }
 
-    /** Whether a live wallpaper is showing, which no app can take a picture of. */
+    /** Whether a live wallpaper is showing, which no app can take a picture of (Solco aside, see SolcoStill). */
     fun liveWallpaper(c: Context): Boolean = runCatching { WallpaperManager.getInstance(c).wallpaperInfo != null }.getOrDefault(false)
+
+    /** Whether the live wallpaper showing is Solco, which saves a still of itself for the family. */
+    fun solcoShowing(c: Context): Boolean =
+        runCatching { WallpaperManager.getInstance(c).wallpaperInfo?.packageName == SolcoStill.PACKAGE }.getOrDefault(false)
 
     /** Whether the wallpaper image itself can be read: Android 13 and later ask for all-files access. */
     fun canReadWallpaper(): Boolean = Environment.isExternalStorageManager()
@@ -129,9 +133,12 @@ object Backdrop {
      */
     fun wallpaper(c: Context, store: SharedPreferences, seat: Seat?): Bitmap? = synchronized(this) {
         val chosen = store.getString(if (seat?.onCover == true) "image_cover" else "image_main", null)
-        val key = chosen ?: "system"
+        // Solco live (27 Nov 2026): the still it saves of what it draws, by screen and version
+        val solco = if (chosen == null && solcoShowing(c)) SolcoStill.stamp(c, seat?.onCover == true) else null
+        val key = chosen ?: solco?.let { "solco:${seat?.onCover == true}:$it" } ?: "system"
         if (cachedKey == key) cached?.let { return it }
-        val bmp = if (chosen != null) runCatching { decode(c, Uri.parse(chosen)) }.getOrNull() else systemWallpaper(c)
+        val bmp = if (chosen != null) runCatching { decode(c, Uri.parse(chosen)) }.getOrNull()
+            else if (solco != null) SolcoStill.read(c, seat?.onCover == true) else systemWallpaper(c)
         cached = bmp; cachedKey = key
         bmp
     }
@@ -179,10 +186,16 @@ object Backdrop {
         val wall = wallpaper(c, store, seat)
         // An app that knows where the launcher has the wallpaper on this widget's page, and its tint
         // (Fold Widgets' live mode), passes it in
-        val live = liveView?.takeIf { seat != null && it.screenW == seat.screenW && it.screenH == seat.screenH }
+        var live = liveView?.takeIf { seat != null && it.screenW == seat.screenW && it.screenH == seat.screenH }
+        val livePaper = liveWallpaper(c)
+        // Solco's still is the screen itself: no launcher offset to apply, only its tint
+        if (livePaper) live = live?.let { LiveView(0f, 0f, it.gain, it.screenW, it.screenH) }
         val family = wallpaperColour(c)
         if (seat != null && wall != null) slice(wall, seat, live, family)?.let { return it }
-        return Ground.flat(family)
+        // A live wallpaper with no picture to read (27 Nov 2026): glass can't see what passes behind its
+        // words, so it is judged against the brightest thing that might (Solco's rings of light grain
+        // ran behind Dorso's "4 min read" and took its contrast). Solid finishes are not affected.
+        return if (livePaper) Ground.unseen(family) else Ground.flat(family)
     }
 
     /**
@@ -266,6 +279,10 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
         const val ROWS = 4
 
         fun flat(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false, family = colour)
+
+        /** Behind is [colour] at its darkest but may be as light as near-white: a live wallpaper no app can see. */
+        fun unseen(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false,
+            bright = IntArray(COLS * ROWS) { 0xFFEDEBE6.toInt() }, dark = IntArray(COLS * ROWS) { colour }, family = colour)
 
         /** From a picture of the ground reaching [margin] px beyond the widget on every side. */
         fun of(picture: Bitmap, margin: Int = 0, seated: Boolean = true, family: Int? = null): Ground {

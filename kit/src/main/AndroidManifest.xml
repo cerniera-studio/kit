@@ -7,6 +7,8 @@
         <provider android:authorities="com.cerniera.partenza" />
         <!-- The family look (26 Nov 2026): every app's widgets wear Fold Widgets' look (Family.kt) -->
         <provider android:authorities="com.fergusonconsultancy.foldwidgets.look" />
+        <!-- Solco's still of itself, for glass over a live wallpaper (27 Nov 2026, SolcoStill.kt) -->
+        <provider android:authorities="com.fergusonconsultancy.solco.still" />
     </queries>
 
     <application>
