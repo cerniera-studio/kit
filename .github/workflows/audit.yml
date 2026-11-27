@@ -1,0 +1,113 @@
+name: Widget audit
+
+# Every Cerniera widget hosted for real by Banco (27 Nov 2026), over a still, a patterned and a
+# live wallpaper, on a main- and a cover-sized display, in every finish. Sheets and faults.md go
+# to the audit-screens branch and the audit-sheets artifact.
+on:
+  push:
+    branches: [audit]
+  workflow_dispatch:
+
+jobs:
+  banco:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Build Banco
+        shell: bash
+        run: |
+          set +e
+          gradle :banco:assembleDebug --no-daemon 2>&1 | tee banco.log
+          status=${PIPESTATUS[0]}
+          grep -E "^e: |What went wrong|^> [^T]|Could not|rror:" banco.log | grep -v "^> Task" | head -12 | while IFS= read -r line; do echo "::error::${line}"; done
+          exit $status
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banco
+          path: banco/build/outputs/apk/debug/banco-debug.apk
+
+  run:
+    needs: banco
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        wall: [still, pattern, live]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: banco
+          path: apks
+      - name: The apps as released from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for pair in fold-widgets:FoldWidgets nodo:Nodo Dorso:Dorso Riserva:Riserva settimana:Settimana Solco:Solco; do
+            repo=${pair%%:*}; apk=${pair#*:}
+            tag=$(gh api "repos/cerniera-studio/$repo/releases?per_page=30" --jq '[.[] | select(.name | test("\\(") | not)] | .[0].tag_name')
+            curl -sfL -o "apks/$apk.apk" "https://github.com/cerniera-studio/$repo/releases/download/$tag/$apk.apk" && echo "$repo $tag" | tee -a versions.txt
+          done
+      - name: Wallpapers
+        run: |
+          pip install --quiet pillow
+          mkdir -p walls && python3 .github/audit_walls.py walls/still.png && python3 .github/audit_walls.py walls/pattern.png
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Audit in the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          disable-animations: true
+          script: WALL=${{ matrix.wall }} bash .github/audit.sh
+      - if: always()
+        run: cp versions.txt audit/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-${{ matrix.wall }}
+          path: audit
+
+  sheets:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: audit-*
+          path: audit
+      - name: Sheets and checks
+        run: |
+          pip install --quiet pillow
+          python3 .github/audit_sheet.py audit
+          cat audit/out/faults.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-sheets
+          path: audit/out
+      - name: Publish to the audit-screens branch
+        run: |
+          mkdir pub && cp audit/out/* pub/ && cp audit/*/run-*.txt audit/*/versions.txt audit/*/picker-*.png pub/ 2>/dev/null; cd pub
+          git init -q -b audit-screens
+          git config user.name "Widget audit"; git config user.email "actions@users.noreply.github.com"
+          git add -A && git commit -qm "Widget audit from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" audit-screens
