@@ -94,17 +94,20 @@ class Bench : Activity() {
             val p = entry.split("|")
             val label = p[0]; val cn = ComponentName.unflattenFromString(p[1])!!
             val x = p[2].toFloat(); val y = p[3].toFloat(); val w = p[4].toFloat(); val h = p[5].toFloat()
+            // Optional 7th field (27 Nov 2026): the sizes to *tell* the widget, "WxH,WxH", when they
+            // differ from the box it really gets, as Smart Launcher's widget stacks do
+            val told = p.getOrNull(6)?.split(",")?.map { it.split("x").let { (a, b) -> SizeF(a.toFloat(), b.toFloat()) } } ?: listOf(SizeF(w, h))
             val id = host.allocateAppWidgetId()
             val opts = Bundle().apply {
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, w.toInt()); putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, w.toInt())
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, h.toInt()); putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, h.toInt())
-                putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, arrayListOf(SizeF(w, h)))
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, told.minOf { it.width }.toInt()); putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, told.maxOf { it.width }.toInt())
+                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, told.minOf { it.height }.toInt()); putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, told.maxOf { it.height }.toInt())
+                putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, ArrayList(told))
             }
             if (!m.bindAppWidgetIdIfAllowed(id, cn, opts)) { Log.e(TAG, "not allowed to bind $cn"); host.deleteAppWidgetId(id); continue }
             val info = m.getAppWidgetInfo(id)
             val v = host.createView(applicationContext, id, info)
             v.setPadding(0, 0, 0, 0)
-            v.updateAppWidgetSize(Bundle(), listOf(SizeF(w, h)))
+            v.updateAppWidgetSize(opts, told)
             stage.addView(v, FrameLayout.LayoutParams(Math.round(w * d), Math.round(h * d)).apply {
                 leftMargin = Math.round(x * d); topMargin = Math.round(y * d)
             })

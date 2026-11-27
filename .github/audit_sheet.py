@@ -68,7 +68,7 @@ bare = {re.sub("-bare$", "", name(s)): s for s in shots if name(s).endswith("-ba
 # Scenes: wall-screen-finish-scene
 scenes = defaultdict(dict)
 for s in shots:
-    m = re.match(r"(still|pattern|live)-(main|cover)-([a-z]+)-([ab])$", name(s))
+    m = re.match(r"(still|pattern|live)-(main|cover)-([a-z]+)-([abc])$", name(s))
     if not m: continue
     wall, screen, fin, sc = m.groups()
     scenes[(wall, screen, sc)][fin] = s
