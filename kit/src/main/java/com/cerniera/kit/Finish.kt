@@ -169,7 +169,8 @@ fun legibleFaces(finish: Finish, ground: Ground, throughBlur: Boolean): Array<Fa
     val usual = lightOver(lum(avg))
     val a = zones.map { legibleFace(finish, it, hi, lo, usual) }
     val b = zones.map { legibleFace(finish, it, hi, lo, !usual) }
-    val pick = if (b.sumOf { it.second } < a.sumOf { it.second }) b else a
+    // Over a live wallpaper no app can see, the ink never leaves the wallpaper's side (Ground.unseen)
+    val pick = if (!ground.unseen && b.sumOf { it.second } < a.sumOf { it.second }) b else a
     return pick.map { it.first }.toTypedArray()
 }
 

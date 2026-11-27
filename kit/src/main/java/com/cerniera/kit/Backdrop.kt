@@ -288,7 +288,9 @@ object Backdrop {
 class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val margin: Int, val zones: IntArray, val seated: Boolean,
                                  val bright: IntArray = zones, val dark: IntArray = zones, val sharp: Bitmap? = null,
                                  /** The wallpaper's own colour, the same in every app (27 Nov 2026): what solid finishes take their tone from. */
-                                 val family: Int = zones[0]) {
+                                 val family: Int = zones[0],
+                                 /** A live wallpaper no app can see: the ink stays on the wallpaper's own side ([unseen]). */
+                                 val unseen: Boolean = false) {
     /** The zone colour nearest a point given as fractions of the widget's width and height. */
     fun at(fx: Float, fy: Float): Int {
         val x = (fx * COLS).toInt().coerceIn(0, COLS - 1)
@@ -302,9 +304,17 @@ class Ground private constructor(val frost: Bitmap?, val clear: Bitmap?, val mar
 
         fun flat(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false, family = colour)
 
-        /** Behind is [colour] at its darkest but may be as light as near-white: a live wallpaper no app can see. */
+        /**
+         * A live wallpaper no app can see: [colour] at its darkest, with lighter grain passing behind.
+         * 27 Nov 2026, second take: judging it against near-white let the cheaper ink be dark, so the
+         * glass thickened towards ivory and Fold Widgets' cards turned pale grey in a stack beside
+         * Dorso's dark glass over the same Solco (Mechack's recording). Now the ink stays on the
+         * wallpaper's side, and the light it is proven against is the colour halfway to ivory: the
+         * glass thickens a little in the wallpaper's own tone, never changes side.
+         */
         fun unseen(colour: Int) = Ground(null, null, 0, IntArray(COLS * ROWS) { colour }, false,
-            bright = IntArray(COLS * ROWS) { 0xFFEDEBE6.toInt() }, dark = IntArray(COLS * ROWS) { colour }, family = colour)
+            bright = IntArray(COLS * ROWS) { blendOpaque(colour, 0xFFEDEBE6.toInt(), 0.5f) }, dark = IntArray(COLS * ROWS) { colour },
+            family = colour, unseen = true)
 
         /** From a picture of the ground reaching [margin] px beyond the widget on every side. */
         fun of(picture: Bitmap, margin: Int = 0, seated: Boolean = true, family: Int? = null): Ground {
