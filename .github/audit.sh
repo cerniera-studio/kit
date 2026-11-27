@@ -138,7 +138,7 @@ for SCREEN in main cover; do
       scene "$WALL-$SCREEN-$f-a" "agenda|$AGL|16|48|255|361;weather|$WES|287|48|255|267;settimana|$SET|558|48|177|300;nodo|$NODO|16|429|255|164;riserva|$RIS|287|335|255|164;dorso|$DORSO|558|368|177|226"
       scene "$WALL-$SCREEN-$f-b" "music|$MUL|16|48|385|226;momento|$MOM|417|48|300|226;month|$MOL|16|294|255|267;settimana|$SET|287|294|385|226;weatherL|$WEL|16|581|385|226;nodo|$NODO|417|540|300|164"
       # As in a Smart Launcher stack (27 Nov 2026): each widget is told sizes that don't match its real box
-      scene "$WALL-$SCREEN-$f-c" "weatherL|$WEL|16|48|330|300|290x340,380x260;agenda|$AGL|362|48|255|361|230x400,320x300;music|$MUL|16|375|385|226|350x250,420x200;settimana|$SET|417|425|300|226|270x250,340x200;dorso|$DORSO|633|48|177|300|160x330,220x260"
+      scene "$WALL-$SCREEN-$f-c" "weatherL|$WEL|16|48|330|300|290x340,380x260;agenda|$AGL|362|48|225|361|210x400,280x300;music|$MUL|16|375|385|226|350x250,420x200;settimana|$SET|417|425|300|226|270x250,340x200;dorso|$DORSO|600|48|140|300|130x330,170x260"
     else
       scene "$WALL-$SCREEN-$f-a" "music|$MUS|13|48|385|226;settimana|$SET|13|290|385|226;nodo|$NODO|13|532|192|164;riserva|$RIS|206|532|192|164;dorso|$DORSO|13|712|192|164;weather|$WES|206|712|192|164"
     fi
