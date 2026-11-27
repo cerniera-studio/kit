@@ -7,6 +7,11 @@ on:
   push:
     branches: [audit]
   workflow_dispatch:
+    inputs:
+      branch:
+        description: Audit each app's latest build from this branch (else from main)
+        required: false
+        default: ""
 
 jobs:
   banco:
@@ -51,9 +56,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          BR="${{ github.event.inputs.branch }}"; [ -z "$BR" ] && [ -f .github/audit-branch ] && BR=$(cat .github/audit-branch)
+          echo "branch: ${BR:-main}" | tee versions.txt
           for pair in fold-widgets:FoldWidgets nodo:Nodo Dorso:Dorso Riserva:Riserva settimana:Settimana Solco:Solco; do
             repo=${pair%%:*}; apk=${pair#*:}
-            tag=$(gh api "repos/cerniera-studio/$repo/releases?per_page=30" --jq '[.[] | select(.name | test("\\(") | not)] | .[0].tag_name')
+            tag=""
+            # The branch's newest build, by build number, when there is one; otherwise main's
+            [ -n "$BR" ] && tag=$(gh api "repos/cerniera-studio/$repo/releases?per_page=40" --jq "[.[] | select(.name | endswith(\"($BR)\"))] | sort_by(.tag_name | ltrimstr(\"build-\") | tonumber) | last | .tag_name // empty")
+            [ -z "$tag" ] && tag=$(gh api "repos/cerniera-studio/$repo/releases?per_page=30" --jq '[.[] | select(.name | test("\\(") | not)] | sort_by(.tag_name | ltrimstr("build-") | tonumber) | last | .tag_name')
             curl -sfL -o "apks/$apk.apk" "https://github.com/cerniera-studio/$repo/releases/download/$tag/$apk.apk" && echo "$repo $tag" | tee -a versions.txt
           done
       - name: Wallpapers

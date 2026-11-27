@@ -73,6 +73,8 @@ cmd() { # waits for Banco to finish a command
 shot() { adb exec-out screencap -p > "$OUT/$1.png"; }
 tap_text() { # taps the first view whose text or description is $1, scrolling down to find it
   local want="$1" i b
+  # From the top: an activity brought back can keep the place it was left scrolled to
+  for i in 1 2 3 4 5 6 7 8; do adb shell input swipe 500 600 500 1900 120; done; sleep 0.5
   for i in $(seq 1 40); do
     adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
     b=$(adb shell cat /sdcard/ui.xml | tr '>' '\n' | grep -E "(text|content-desc)=\"$want\"" | head -1 | grep -o 'bounds="[^"]*"' | grep -o '[0-9]\+' | tr '\n' ' ')
